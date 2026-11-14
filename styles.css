@@ -255,3 +255,8 @@ h2 em { font-style: normal; }
 .profile-link:hover .profile-link-avatar{background:var(--red)}
 .profile-link-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
 @media(max-width:900px){.profile-link{justify-content:flex-start;max-width:none;width:100%}.profile-link-name{max-width:none}}
+/* Phase 3.1 — custom user photo in the signed-in landing header. */
+.profile-link-avatar{border-radius:50%;overflow:hidden}
+.has-avatar-image img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+/* Hidden authentication-gated sections must never be overridden by layout display rules. */
+[hidden]{display:none!important}
