@@ -1,7 +1,7 @@
-// FreeLanzo Phase 3 rules — private account, owner-only portfolio,
-// and opt-in discoverable freelancer listings.
-// IMPORTANT: Publish these rules in the freelanzo-82 Firebase project.
-// If you already have later-phase rules (e.g. messaging), MERGE carefully.
+// FreeLanzo Phase 3.1 — private accounts, private editable portfolios,
+// opt-in read-only public freelancer pages, and public project snapshots.
+// Publish in Firebase Console -> freelanzo-82 -> Firestore -> Rules.
+// If you already added rules for later phases, merge them; don't overwrite.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -10,6 +10,10 @@ service cloud.firestore {
     function freelancerOwner(uid) {
       return isOwner(uid) &&
         get(/databases/$(database)/documents/users/$(uid)).data.role == 'freelancer';
+    }
+    function validAvatar(value) {
+      return value is string && value.size() <= 700 &&
+        (value == '' || value.matches('https://res[.]cloudinary[.]com/[A-Za-z0-9_-]+/image/upload/.*'));
     }
     function validProfileFields() {
       return request.resource.data.displayName is string &&
@@ -25,12 +29,41 @@ service cloud.firestore {
         request.resource.data.get('skills', '').size() <= 180 &&
         request.resource.data.get('category', '') is string &&
         request.resource.data.get('category', '').size() <= 60 &&
+        validAvatar(request.resource.data.get('avatarURL', '')) &&
         request.resource.data.updatedAt is timestamp;
     }
+    function validPortfolio(data) {
+      return data.title is string &&
+        data.title.size() > 0 && data.title.size() <= 90 &&
+        data.category is string &&
+        data.category.size() > 0 && data.category.size() <= 60 &&
+        data.description is string &&
+        data.description.size() > 0 && data.description.size() <= 700 &&
+        data.projectUrl is string && data.projectUrl.size() <= 500 &&
+        data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+    function portfolioKeys() {
+      return ['title', 'category', 'description', 'projectUrl', 'createdAt', 'updatedAt'];
+    }
+    function validPublicProfile(uid) {
+      return request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'headline', 'bio', 'location', 'skills',
+          'category', 'avatarURL', 'published', 'updatedAt'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'uid', 'displayName', 'headline', 'bio', 'location', 'skills',
+          'category', 'avatarURL', 'published', 'updatedAt'
+        ]) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.published == true &&
+        validProfileFields();
+    }
+
     match /users/{uid} {
+      // Private account profile. No directory/list queries and no reads by others.
       allow get: if isOwner(uid);
-      allow list: if false;  // No user-email directory.
-      // Preserve Phase 2 account creation and role immutability.
+      allow list: if false;
+      // Preserve the original Phase 2 account creation schema and immutable role.
       allow create: if isOwner(uid) &&
         request.resource.data.keys().hasOnly([
           'uid', 'email', 'displayName', 'role', 'provider', 'photoURL',
@@ -51,72 +84,55 @@ service cloud.firestore {
         request.resource.data.createdAt is timestamp &&
         request.resource.data.termsAcceptedAt is timestamp &&
         request.resource.data.termsVersion == '2026-11-14';
-      // Only non-sensitive profile attributes may change. Never role/email/UID/consent.
+      // Only profile fields, including the opted-in custom photo, may be changed.
       allow update: if isOwner(uid) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'headline', 'bio', 'location', 'skills', 'category', 'updatedAt'
-        ]) &&
-        validProfileFields();
+          'displayName', 'headline', 'bio', 'location', 'skills', 'category',
+          'avatarURL', 'updatedAt'
+        ]) && validProfileFields();
       allow delete: if false;
 
-      // Private portfolio items are visible/editable only by their owner.
-      match /portfolios/{portfolioId} {
+      match /portfolios/{projectId} {
         allow get: if isOwner(uid);
         allow list: if isOwner(uid) && request.query.limit <= 100;
         allow create: if freelancerOwner(uid) &&
-          request.resource.data.keys().hasOnly([
-            'title', 'category', 'description', 'projectUrl', 'createdAt', 'updatedAt'
-          ]) &&
-          request.resource.data.keys().hasAll([
-            'title', 'category', 'description', 'projectUrl', 'createdAt', 'updatedAt'
-          ]) && validPortfolio();
+          request.resource.data.keys().hasOnly(portfolioKeys()) &&
+          request.resource.data.keys().hasAll(portfolioKeys()) &&
+          validPortfolio(request.resource.data);
         allow update: if freelancerOwner(uid) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'title', 'category', 'description', 'projectUrl', 'updatedAt'
-          ]) && validPortfolio();
+          ]) && validPortfolio(request.resource.data);
         allow delete: if freelancerOwner(uid);
-        function validPortfolio() {
-          return request.resource.data.title is string &&
-            request.resource.data.title.size() > 0 &&
-            request.resource.data.title.size() <= 90 &&
-            request.resource.data.category is string &&
-            request.resource.data.category.size() > 0 &&
-            request.resource.data.category.size() <= 60 &&
-            request.resource.data.description is string &&
-            request.resource.data.description.size() > 0 &&
-            request.resource.data.description.size() <= 700 &&
-            request.resource.data.projectUrl is string &&
-            request.resource.data.projectUrl.size() <= 500 &&
-            request.resource.data.createdAt is timestamp &&
-            request.resource.data.updatedAt is timestamp;
-        }
       }
     }
 
-    // Safe, opt-in directory: NO email, phone number or Auth data.
     match /publicFreelancers/{uid} {
+      // Public profile documents are deliberately limited to safe, opt-in fields.
+      // A signed-in user can read only published freelancers, plus their own.
       allow get: if isOwner(uid) || (signedIn() && resource.data.published == true);
-      // Query must include where('published','==',true) and limit(80).
       allow list: if signedIn() && request.query.limit <= 100 &&
         resource.data.published == true;
-      allow create, update: if freelancerOwner(uid) &&
-        request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'headline', 'bio', 'location', 'skills',
-          'category', 'published', 'updatedAt'
-        ]) &&
-        request.resource.data.keys().hasAll([
-          'uid', 'displayName', 'headline', 'bio', 'location', 'skills',
-          'category', 'published', 'updatedAt'
-        ]) &&
-        request.resource.data.uid == uid &&
-        request.resource.data.published == true &&
-        validProfileFields();
-      allow delete: if isOwner(uid);
+      allow create, update: if freelancerOwner(uid) && validPublicProfile(uid);
+      allow delete: if freelancerOwner(uid);
+
+      match /projects/{projectId} {
+        // Read copies, NOT private editable projects. Withdrawing publication
+        // immediately revokes outside reads, even if copied documents remain.
+        allow get: if isOwner(uid) || (signedIn() &&
+          get(/databases/$(database)/documents/publicFreelancers/$(uid)).data.published == true);
+        allow list: if signedIn() && request.query.limit <= 100 &&
+          (isOwner(uid) ||
+            get(/databases/$(database)/documents/publicFreelancers/$(uid)).data.published == true);
+        allow create, update: if freelancerOwner(uid) &&
+          request.resource.data.keys().hasOnly(portfolioKeys()) &&
+          request.resource.data.keys().hasAll(portfolioKeys()) &&
+          validPortfolio(request.resource.data);
+        allow delete: if freelancerOwner(uid);
+      }
     }
 
-    // No unrestricted access to other collections.
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    // Default deny any other collections, including unknown nested data.
+    match /{document=**} { allow read, write: if false; }
   }
 }
