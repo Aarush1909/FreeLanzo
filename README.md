@@ -1,3 +1,43 @@
+# FreeLanzo Phase 3.2 — Landing category → filtered Explore
+
+This is an incremental Phase 3.1 update. All existing authentication, dashboards, profiles, projects, and photos are preserved.
+
+## New behavior (updated: no forced guest redirect)
+
+- All **15** Find Your Field cards on the landing page are keyboard-accessible links.
+- **Signed-in clients and freelancers:** selecting a category opens their role-correct dashboard at **Explore Freelancers**, with the exact category preselected. The normal search and filters still work.
+- **Visitors without an account:** the landing page shows **“Sign up or log in first to see freelancers”** and **keeps them on the home page**. They can choose Log In, Sign Up, or Not now; there is no automatic redirect.
+- If an existing member clicks **Log in** from the signup page, the category is preserved. Successful signup/login also returns the member to the filtered directory.
+- The destination always checks Firebase Auth; no private freelancer data is exposed to guests. Published public portfolios remain owner-editable only.
+- No new Firestore rules or collections are needed. Existing Explore currently loads **up to 80** published freelancer profiles, then filters them; results beyond that limit need pagination in a later scaling pass.
+
+## Modified files (relative to the previous Phase 3.1 ZIP)
+
+1. `index.html` — clickable 15 cards, a dismissible guest notice with Log In / Sign Up / Not now, category-navigation module.
+2. `styles.css` — linked-card focus/hover/hidden styles and guest notice actions.
+3. `js/dashboard-router.js` — preserves `view=explore` and category while choosing the right dashboard; returns guest category deep-links to the home-page notice.
+4. `js/dashboard.js` — preselects the category filter and preserves it across role redirects.
+5. `js/auth-pages.js` — preserves chosen category through signup/login and redirects to filtered Explore.
+6. `js/cloudinary-config.js` — includes your previously supplied Cloudinary cloud name and unsigned preset, so replacing the whole ZIP won't wipe your setup. These are public identifiers; no secret is included.
+7. `README.md` — this update and checkpoints.
+
+## New files
+
+1. `js/category-navigation.js` — Auth-aware landing category navigation; guests stay on the page and can choose whether to log in or sign up.
+
+## Install and test
+
+1. Back up your current working FreeLanzo folder.
+2. Extract this ZIP and replace the **modified files** listed above; add the **one new file** in `js/`. Keep every other file unchanged.
+3. Start Live Server. Test selecting **Web Development** while logged in as Client: it should open Client → Explore with **Web Development** selected. Repeat with Freelancer.
+4. Log out, select **Graphic Design** from the home page: notice appears but you **remain on the home page**. Choose Sign Up and create a test account; it should open Explore with Graphic Design selected.
+5. Test **Already have an account? Log in** from the signup page: the category should remain selected after signing in.
+6. Test the mobile category grid and category search.
+
+No Firebase or Cloudinary console changes are required for this update.
+
+---
+
 # FreeLanzo — Phase 3.1: Profile photos + read-only public freelancer portfolios
 
 **Built directly on Phase 3.** All Phase 1 landing content and approved FL logo, Phase 2 Firebase login/signup, and Phase 3 role-specific dashboards are preserved. Uses your existing Firebase project **`freelanzo-82`**. HTML/CSS/vanilla JS, hosted on a static HTTP server such as Live Server or GitHub Pages. The existing Messaging section is still a placeholder.

@@ -30,6 +30,9 @@ const portfolioCollection = () => collection(db, "users", state.user.uid, "portf
 const publicProjectsCollection = () => collection(db, "publicFreelancers", state.user.uid, "projects");
 const publicProjectRef = id => doc(db, "publicFreelancers", state.user.uid, "projects", id);
 const state = { user: null, profile: null, published: false, portfolios: [], freelancers: [], directoryLoaded: false, portfoliosLoaded: false, editId: null, loaded: false, photoBlob: null, photoObjectUrl: null };
+// Landing-category deep links: validate against the same options used by Explore.
+const incomingCategory = new URLSearchParams(location.search).get("category");
+const selectedCategory = categories.includes(incomingCategory) ? incomingCategory : "";
 let noticeTimer;
 
 function readableError(error) {
@@ -495,7 +498,10 @@ onAuthStateChanged(auth, async user => {
       return;
     }
     if (snap.data().role !== ROLE) {
-      location.replace(`${snap.data().role}-dashboard.html?view=home`);
+      const target = new URL(`${snap.data().role}-dashboard.html`, location.href);
+      target.searchParams.set("view", getCurrentView());
+      if (selectedCategory && getCurrentView() === "explore") target.searchParams.set("category", selectedCategory);
+      location.replace(target.href);
       return;
     }
     if (state.loaded) return;
@@ -503,6 +509,7 @@ onAuthStateChanged(auth, async user => {
     state.profile = snap.data();
     state.loaded = true;
     populateProfile();
+    if (selectedCategory) $("#explore-category").value = selectedCategory;
     attachEvents();
     $("#page-status").hidden = true;
     $("#workspace").hidden = false;

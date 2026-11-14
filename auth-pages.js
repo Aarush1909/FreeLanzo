@@ -83,7 +83,26 @@ function formValid(form) {
   return true;
 }
 function cleanEmail(value) { return value.trim().toLowerCase(); }
-function redirectToDashboard() { window.location.assign("dashboard.html"); }
+// Carry a selected landing-page category through signup / login to Explore.
+const CATEGORY_OPTIONS = new Set(['Web Development','Graphic Design','Mobile App Development','Digital Marketing','Video Editing','Writing & Translation','Data Science & Analytics','AI & Machine Learning','UI/UX Design','Photography','Cybersecurity','3D Design & Animation','Virtual Assistance','Business & Consulting','Education & Tutoring']);
+const requestedCategory = new URLSearchParams(location.search).get("category");
+const validRequestedCategory = CATEGORY_OPTIONS.has(requestedCategory) ? requestedCategory : "";
+if (validRequestedCategory) {
+  const switchLink = document.querySelector('.switch-copy a[href^="login.html"], .switch-copy a[href^="signup.html"]');
+  if (switchLink) {
+    const target = new URL(switchLink.href);
+    target.searchParams.set("category", validRequestedCategory);
+    switchLink.href = target.href;
+  }
+}
+function redirectToDashboard() {
+  const target = new URL("dashboard.html", location.href);
+  if (validRequestedCategory) {
+    target.searchParams.set("view", "explore");
+    target.searchParams.set("category", validRequestedCategory);
+  }
+  window.location.assign(target.href);
+}
 
 async function createAccountDocument(user, role, preferredName = "", provider = "password") {
   const ref = doc(db, "users", user.uid);

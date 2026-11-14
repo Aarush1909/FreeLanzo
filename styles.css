@@ -120,7 +120,9 @@ h2 em { font-style: normal; }
 .category-toolbar { display: flex; align-items: center; gap: 11px; border: 1px solid var(--black); padding: 0 16px; height: 49px; width: 260px; flex: none; background: white; }
 .category-toolbar .icon { width: 18px; }.category-toolbar input { border: 0; outline: 0; width: 100%; font: 12px 'Courier New',monospace; }
 .category-grid { counter-reset: category; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 1px; border: 1px solid var(--border); background: var(--border); }
-.category-card { position: relative; min-height: 237px; padding: 30px 19px 42px; background: white; transition: background .18s,color .18s; }
+.category-card { display: block; position: relative; min-height: 237px; padding: 30px 19px 42px; background: white; color: var(--black); text-decoration: none; cursor: pointer; transition: background .18s,color .18s; }
+.category-card[hidden] { display: none; }
+.category-card:focus-visible { z-index: 1; outline: 3px solid var(--red); outline-offset: -3px; }
 .category-card::before { counter-increment: category; content: counter(category, decimal-leading-zero) ' / 15'; position: absolute; top: 21px; right: 19px; font: 700 10px 'Courier New',monospace; color: #a1a19d; }
 .category-card:hover { color: white; background: var(--black); }.category-card:hover::before { color: #777870; }
 .category-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--black); margin: 0 0 31px; background: transparent; color: var(--black); }
@@ -260,3 +262,15 @@ h2 em { font-style: normal; }
 .has-avatar-image img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 /* Hidden authentication-gated sections must never be overridden by layout display rules. */
 [hidden]{display:none!important}
+
+/* Phase 3.2: guest-access notification on the landing category directory. */
+.category-auth-notice { margin: 24px 0 0; border: 1px solid var(--black); background: #fff; padding: 20px 24px; box-shadow: 6px 6px 0 var(--black); }
+.category-auth-notice[hidden] { display: none; }
+.category-auth-notice strong { display: block; font-size: 18px; }
+.category-auth-notice p { margin: 7px 0 16px; color: var(--muted); font-size: 14px; }
+.category-auth-notice .btn { display: inline-flex; }
+
+/* Phase 3.2 refinement: optional, dismissible login/signup actions. */
+.category-auth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.category-auth-actions button { cursor: pointer; }
+.category-auth-notice strong:focus { outline: none; }
