@@ -1,21 +1,35 @@
 /* FreeLanzo Phase 3 workspace. Real Firebase data, no demo accounts/messages. */
 import { onAuthStateChanged, signOut, updateProfile as updateAuthProfile } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 import {
-  addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, query,
+  collection, deleteDoc, doc, getDoc, getDocs, limit, query, startAfter,
   serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
+import { AVATAR_MAX_BYTES, initials, isAvatarUrl, optimizeAvatar, renderAvatar, uploadAvatar } from "./avatar.js";
 
 const ROLE = document.body.dataset.role;
 const VALID_VIEWS = new Set(ROLE === "freelancer"
   ? ["home", "profile", "portfolios", "explore", "messages", "settings"]
   : ["home", "profile", "explore", "messages", "settings"]);
+// Remove typical email and telephone patterns before writing PUBLIC copies.
+// Private saved text is not modified; don't treat this as a full PII detection system.
+function hideContactDetails(value) {
+  return String(value || "")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[contact hidden]")
+    .replace(/\+?\d[\d ().-]{7,}\d/g, "[contact hidden]");
+}
+function safePublicProjectUrl(url) {
+  const value = String(url || "");
+  return hideContactDetails(value) === value ? value : "";
+}
 const categories = ["Web Development", "Graphic Design", "Mobile App Development", "Digital Marketing", "Video Editing", "Writing & Translation", "Data Science & Analytics", "AI & Machine Learning", "UI/UX Design", "Photography", "Cybersecurity", "3D Design & Animation", "Virtual Assistance", "Business & Consulting", "Education & Tutoring"];
 const $ = selector => document.querySelector(selector);
 const userDocument = () => doc(db, "users", state.user.uid);
 const publicDocument = () => doc(db, "publicFreelancers", state.user.uid);
 const portfolioCollection = () => collection(db, "users", state.user.uid, "portfolios");
-const state = { user: null, profile: null, published: false, portfolios: [], freelancers: [], directoryLoaded: false, portfoliosLoaded: false, editId: null, loaded: false };
+const publicProjectsCollection = () => collection(db, "publicFreelancers", state.user.uid, "projects");
+const publicProjectRef = id => doc(db, "publicFreelancers", state.user.uid, "projects", id);
+const state = { user: null, profile: null, published: false, portfolios: [], freelancers: [], directoryLoaded: false, portfoliosLoaded: false, editId: null, loaded: false, photoBlob: null, photoObjectUrl: null };
 let noticeTimer;
 
 function readableError(error) {
@@ -34,7 +48,6 @@ function notify(message, success = false) {
   noticeTimer = setTimeout(() => { bar.hidden = true; }, 6500);
 }
 function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
-function initials(text) { return (text || "FL").trim().split(/\s+/).slice(0, 2).map(s => s.slice(0, 1).toUpperCase()).join("") || "FL"; }
 function safeExternalUrl(value) {
   try {
     const url = new URL(value);
@@ -58,16 +71,16 @@ function getCurrentView() {
 }
 function drawName() {
   const name = state.profile.displayName || state.user.displayName || "FreeLanzo member";
-  const avatar = initials(name);
+  const url = state.profile.avatarURL || "";
   setText("header-name", name);
-  setText("header-avatar", avatar);
   setText("sidebar-name", name);
-  setText("sidebar-avatar", avatar);
   setText("welcome-name", name.split(/\s+/)[0]);
   setText("preview-name", name);
-  setText("preview-avatar", avatar);
   setText("preview-headline", state.profile.headline || "Your headline goes here.");
   setText("settings-email", state.user.email || state.profile.email || "—");
+  for (const id of ["header-avatar", "sidebar-avatar", "preview-avatar", "photo-preview"]) renderAvatar(document.getElementById(id), url, name);
+  const remove = $("#photo-remove");
+  if (remove) remove.disabled = !isAvatarUrl(url);
 }
 function populateProfile() {
   const form = $("#profile-form");
@@ -76,16 +89,16 @@ function populateProfile() {
   }
   drawName();
 }
-function publicData() {
-  const p = state.profile;
+function publicData(p = state.profile) {
   return {
     uid: state.user.uid,
-    displayName: (p.displayName || "Freelancer").trim(),
-    headline: p.headline || "",
-    bio: p.bio || "",
-    skills: p.skills || "",
+    displayName: hideContactDetails((p.displayName || "Freelancer").trim()),
+    headline: hideContactDetails(p.headline),
+    bio: hideContactDetails(p.bio),
+    skills: hideContactDetails(p.skills),
     category: p.category || "",
-    location: p.location || "",
+    location: hideContactDetails(p.location),
+    avatarURL: isAvatarUrl(p.avatarURL) ? p.avatarURL : "",
     published: true,
     updatedAt: serverTimestamp()
   };
@@ -139,6 +152,11 @@ function resetPortfolioForm() {
   setText("portfolio-save", "Add project ↗");
   $("#portfolio-cancel").hidden = true;
 }
+function publicProjectFields(item) {
+  // Do not copy user IDs, email, phone, private profile fields, or permissions.
+  return { title: hideContactDetails(item.title), category: item.category, description: hideContactDetails(item.description),
+    projectUrl: safePublicProjectUrl(item.projectUrl), createdAt: item.createdAt, updatedAt: item.updatedAt };
+}
 async function savePortfolio(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -149,19 +167,34 @@ async function savePortfolio(event) {
   const projectUrl = form.elements.projectUrl.value.trim();
   if (!title || !description || !categories.includes(category)) { notify("Enter a title, description, and valid category."); return; }
   if (projectUrl && !safeExternalUrl(projectUrl)) { notify("Project links must start with https:// or http://."); return; }
+  if (!state.editId && state.portfolios.length >= 90) { notify("For this project, you can display up to 90 portfolio items."); return; }
   const payload = { title, description, category, projectUrl, updatedAt: serverTimestamp() };
   const button = $("#portfolio-save"); button.disabled = true;
   try {
     if (state.editId) {
-      await updateDoc(doc(portfolioCollection(), state.editId), payload);
+      if (state.published) {
+        const existing = state.portfolios.find(item => item.id === state.editId);
+        if (!existing) throw new Error("Project not found. Refresh and try again.");
+        const batch = writeBatch(db);
+        batch.update(doc(portfolioCollection(), state.editId), payload);
+        batch.set(publicProjectRef(state.editId), publicProjectFields({ ...payload, createdAt: existing.createdAt }));
+        await batch.commit();
+      } else await updateDoc(doc(portfolioCollection(), state.editId), payload);
       notify("Portfolio project updated.", true);
     } else {
-      await addDoc(portfolioCollection(), { ...payload, createdAt: serverTimestamp() });
+      const newRef = doc(portfolioCollection());
+      const fields = { ...payload, createdAt: serverTimestamp() };
+      if (state.published) {
+        const batch = writeBatch(db);
+        batch.set(newRef, fields);
+        batch.set(publicProjectRef(newRef.id), publicProjectFields(fields));
+        await batch.commit();
+      } else await setDoc(newRef, fields);
       notify("Portfolio project added.", true);
     }
     resetPortfolioForm();
     await loadPortfolios();
-  } catch (err) { notify(readableError(err)); }
+  } catch (err) { notify(err?.message === "Project not found. Refresh and try again." ? err.message : readableError(err)); }
   finally { button.disabled = false; }
 }
 async function handlePortfolioClick(event) {
@@ -182,7 +215,12 @@ async function handlePortfolioClick(event) {
     form.elements.title.focus();
   } else if (confirm(`Delete “${found.title}”? This cannot be undone.`)) {
     try {
-      await deleteDoc(doc(portfolioCollection(), id));
+      if (state.published) {
+        const batch = writeBatch(db);
+        batch.delete(doc(portfolioCollection(), id));
+        batch.delete(publicProjectRef(id));
+        await batch.commit();
+      } else await deleteDoc(doc(portfolioCollection(), id));
       if (state.editId === id) resetPortfolioForm();
       notify("Portfolio project deleted.", true);
       await loadPortfolios();
@@ -213,11 +251,7 @@ async function saveProfile(event) {
       // Keep the private profile and the published profile synchronized atomically.
       const batch = writeBatch(db);
       batch.update(userDocument(), updates);
-      batch.set(publicDocument(), {
-        uid: state.user.uid, displayName, headline, bio, location: locationText,
-        skills: updates.skills, category: updates.category, published: true,
-        updatedAt: serverTimestamp()
-      });
+      batch.set(publicDocument(), publicData({ ...state.profile, ...updates }));
       await batch.commit();
     } else await updateDoc(userDocument(), updates);
     state.profile = { ...state.profile, ...updates };
@@ -228,17 +262,52 @@ async function saveProfile(event) {
   } catch (err) { notify(readableError(err)); }
   finally { button.disabled = false; }
 }
+async function getAllPublicProjects() {
+  const docs = [];
+  let cursor = null;
+  while (true) {
+    const q = cursor ? query(publicProjectsCollection(), startAfter(cursor), limit(90))
+      : query(publicProjectsCollection(), limit(90));
+    const result = await getDocs(q);
+    docs.push(...result.docs);
+    if (result.size < 90) break;
+    cursor = result.docs[result.docs.length - 1];
+  }
+  return docs;
+}
+async function synchronizePublicProjects() {
+  // Sync while profile is hidden, then publish the parent last. All projects remain
+  // read-protected until that parent document is visible.
+  await loadPortfolios();
+  const current = new Map(state.portfolios.map(item => [item.id, item]));
+  const existing = await getAllPublicProjects();
+  const deletions = existing.filter(item => !current.has(item.id));
+  const operations = [
+    ...deletions.map(item => ({ type: "delete", ref: item.ref })),
+    ...state.portfolios.map(item => ({ type: "set", ref: publicProjectRef(item.id), fields: publicProjectFields(item) }))
+  ];
+  for (let i = 0; i < operations.length; i += 10) {
+    const batch = writeBatch(db);
+    for (const operation of operations.slice(i, i + 10)) {
+      if (operation.type === "delete") batch.delete(operation.ref);
+      else batch.set(operation.ref, operation.fields);
+    }
+    await batch.commit();
+  }
+}
 async function saveVisibility() {
   if (ROLE !== "freelancer") return;
   const shouldPublish = $("#settings-published").checked;
   const button = $("#save-visibility"); button.disabled = true;
   try {
-    if (shouldPublish) await setDoc(publicDocument(), publicData());
-    else await deleteDoc(publicDocument());
+    if (shouldPublish) {
+      await synchronizePublicProjects();
+      await setDoc(publicDocument(), publicData());
+    } else await deleteDoc(publicDocument());
     state.published = shouldPublish;
     setText("stat-visibility", shouldPublish ? "Visible" : "Hidden");
     state.directoryLoaded = false;
-    notify(shouldPublish ? "Your freelancer listing is now visible to signed-in members." : "Your listing has been removed from the directory.", true);
+    notify(shouldPublish ? "Public profile and portfolio projects are now visible to signed-in members." : "Your public profile and portfolio projects are now hidden.", true);
   } catch (err) {
     $("#settings-published").checked = state.published;
     notify(readableError(err));
@@ -246,7 +315,7 @@ async function saveVisibility() {
 }
 async function loadFreelancers() {
   const results = await getDocs(query(collection(db, "publicFreelancers"), where("published", "==", true), limit(80)));
-  state.freelancers = results.docs.map(item => item.data());
+  state.freelancers = results.docs.map(item => ({ ...item.data(), uid: item.id }));
   state.directoryLoaded = true;
   setText("stat-freelancers", state.freelancers.length);
   renderFreelancers();
@@ -266,7 +335,8 @@ function renderFreelancers() {
   for (const freelancer of matches) {
     const card = node("article", "freelancer-card");
     const head = node("div", "freelancer-card-head");
-    const icon = node("div", "freelancer-avatar", initials(freelancer.displayName));
+    const icon = node("div", "freelancer-avatar");
+    renderAvatar(icon, freelancer.avatarURL, freelancer.displayName);
     const nameBox = node("div");
     nameBox.append(node("h3", "", freelancer.displayName || "Freelancer"), node("span", "freelancer-category", freelancer.category || "CREATIVE FREELANCER"));
     head.append(icon, nameBox);
@@ -279,9 +349,80 @@ function renderFreelancers() {
       card.append(tags);
     }
     const foot = node("div", "freelancer-card-foot");
-    foot.append(node("span", "", freelancer.location || "Location not specified"), node("span", "coming-soon", "MESSAGES / SOON"));
+    const view = node("a", "view-public-profile", "View full profile ↗");
+    view.href = `freelancer-profile.html?id=${encodeURIComponent(freelancer.uid)}`;
+    foot.append(node("span", "", freelancer.location || "Location not specified"), view);
     card.append(foot);
     wrap.append(card);
+  }
+}
+async function updateAvatarURL(url) {
+  if (url && !isAvatarUrl(url)) throw new Error("Not a valid Cloudinary image URL.");
+  const updates = { avatarURL: url, updatedAt: serverTimestamp() };
+  if (ROLE === "freelancer" && state.published) {
+    const batch = writeBatch(db);
+    batch.update(userDocument(), updates);
+    batch.update(publicDocument(), updates);
+    await batch.commit();
+  } else await updateDoc(userDocument(), updates);
+  state.profile = { ...state.profile, avatarURL: url };
+  state.directoryLoaded = false;
+  drawName();
+}
+function clearPhotoSelection() {
+  if (state.photoObjectUrl) URL.revokeObjectURL(state.photoObjectUrl);
+  state.photoObjectUrl = null;
+  state.photoBlob = null;
+  $("#photo-upload").disabled = true;
+  $("#photo-input").value = "";
+  drawName();
+}
+async function onChoosePhoto(event) {
+  const file = event.currentTarget.files?.[0];
+  clearPhotoSelection();
+  if (!file) return;
+  try {
+    if (file.size > AVATAR_MAX_BYTES) throw new Error("That picture is over 500 KB. Please choose a smaller file.");
+    $("#photo-status").textContent = "Preparing your photo…";
+    const blob = await optimizeAvatar(file);
+    state.photoBlob = blob;
+    state.photoObjectUrl = URL.createObjectURL(blob);
+    const preview = $("#photo-preview");
+    const img = node("img"); img.src = state.photoObjectUrl; img.alt = "Selected photo preview";
+    preview.replaceChildren(img); preview.classList.add("has-avatar-image");
+    $("#photo-upload").disabled = false;
+    $("#photo-status").textContent = `Ready to upload: ${(blob.size / 1000).toFixed(1)} KB. Click Upload photo to save.`;
+  } catch (error) { $("#photo-status").textContent = error.message; clearPhotoSelection(); }
+}
+async function onUploadPhoto() {
+  if (!state.photoBlob) return;
+  const upload = $("#photo-upload");
+  const remove = $("#photo-remove");
+  upload.disabled = true; remove.disabled = true;
+  $("#photo-status").textContent = "Uploading your photo…";
+  try {
+    const url = await uploadAvatar(state.photoBlob);
+    await updateAvatarURL(url);
+    clearPhotoSelection();
+    $("#photo-status").textContent = "Photo saved successfully.";
+    notify("Profile photo updated.", true);
+  } catch (error) {
+    $("#photo-status").textContent = error.message || "Could not upload your photo.";
+    upload.disabled = false;
+    remove.disabled = !isAvatarUrl(state.profile.avatarURL);
+  }
+}
+async function onRemovePhoto() {
+  if (!state.profile.avatarURL) return;
+  const button = $("#photo-remove"); button.disabled = true;
+  try {
+    await updateAvatarURL("");
+    clearPhotoSelection();
+    $("#photo-status").textContent = "Photo removed from your FreeLanzo profile.";
+    notify("Profile photo removed.", true);
+  } catch (error) {
+    $("#photo-status").textContent = readableError(error);
+    button.disabled = false;
   }
 }
 async function openView(view, push = false) {
@@ -319,6 +460,9 @@ function attachEvents() {
   });
   document.querySelectorAll("[data-signout]").forEach(b => b.addEventListener("click", logout));
   $("#profile-form").addEventListener("submit", saveProfile);
+  $("#photo-input").addEventListener("change", onChoosePhoto);
+  $("#photo-upload").addEventListener("click", onUploadPhoto);
+  $("#photo-remove").addEventListener("click", onRemovePhoto);
   if (ROLE === "freelancer") {
     $("#portfolio-form").addEventListener("submit", savePortfolio);
     $("#portfolio-list").addEventListener("click", handlePortfolioClick);
