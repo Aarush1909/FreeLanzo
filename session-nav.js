@@ -2,10 +2,7 @@
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
-
-function initials(name) {
-  return (name || "FL").trim().split(/\s+/).slice(0, 2).map(part => part.slice(0, 1).toUpperCase()).join("");
-}
+import { initials, renderAvatar } from "./avatar.js";
 
 onAuthStateChanged(auth, async user => {
   document.querySelectorAll('[data-auth="login"], [data-auth="signup"]').forEach(link => {
@@ -19,7 +16,7 @@ onAuthStateChanged(auth, async user => {
   const avatarNode = profile.querySelector('[data-user-initials]');
   const fallbackName = user.displayName || "My dashboard";
   nameNode.textContent = fallbackName;
-  avatarNode.textContent = initials(fallbackName);
+  renderAvatar(avatarNode, "", fallbackName);
   try {
     const snapshot = await getDoc(doc(db, "users", user.uid));
     // The user might have logged out while this read was in flight.
@@ -27,7 +24,7 @@ onAuthStateChanged(auth, async user => {
     if (snapshot.exists()) {
       const name = snapshot.data().displayName || fallbackName;
       nameNode.textContent = name;
-      avatarNode.textContent = initials(name);
+      renderAvatar(avatarNode, snapshot.data().avatarURL, name);
     }
   } catch (error) {
     // Navigation remains usable if Firestore is temporarily unavailable.
