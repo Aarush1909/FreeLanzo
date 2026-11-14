@@ -121,3 +121,42 @@
 @media(max-width:760px){.dashboard-stamp{display:none}.stats-grid{grid-template-columns:1fr 1fr}.stats-grid .stat-card:last-child{grid-column:1/-1}.dash-columns{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}.freelancer-grid{grid-template-columns:1fr}.explore-toolbar{grid-template-columns:1fr 1fr}.explore-toolbar input{grid-column:1/-1}.explore-toolbar .btn{width:100%}}
 @media(max-width:520px){.dash-main{padding:30px 18px 60px}.view-top{margin-bottom:25px}.view-top h1{font-size:clamp(40px,12vw,56px)}.stats-grid{grid-template-columns:1fr}.stats-grid .stat-card:last-child{grid-column:auto}.stat-card{min-height:125px}.stat-card strong{margin:10px 0}.quick-grid{grid-template-columns:1fr}.quick-card{min-height:155px}.quick-card h3{margin-top:22px}.dash-panel{padding:21px}.dashboard-footer{flex-direction:column;padding:21px 18px}.section-divider span{display:none}.explore-toolbar{grid-template-columns:1fr}.explore-toolbar input{grid-column:auto}.setting-row{align-items:flex-start;flex-direction:column}.setting-row strong{text-align:left}.dash-notice{top:80px}}
 @media(prefers-reduced-motion:reduce){.dash-view{animation:none}}
+
+/* Phase 3.1 — user photos and read-only public freelancer portfolios. */
+.photo-editor{border:1px solid #d3d4ce;background:#f8f8f5;padding:21px;margin-bottom:26px}
+.photo-editor-row{display:flex;align-items:center;gap:18px;margin:15px 0 19px}
+.photo-editor-avatar{width:85px;height:85px;flex:none;display:grid;place-items:center;overflow:hidden;border-radius:50%;background:#181917;color:#fff;font-size:27px;font-weight:900}
+.photo-editor-title{font-size:18px;font-weight:800;margin:0 0 4px}
+.photo-editor .quiet-note{margin:0;max-width:340px}
+.photo-editor .dash-field{margin:0 0 16px}
+.photo-editor .dash-field input[type=file]{cursor:pointer;height:auto;min-height:50px;background:#fff}
+.photo-editor-actions{display:flex;gap:9px;flex-wrap:wrap}
+.photo-editor-actions .btn{min-height:43px;padding:10px 16px}
+.photo-editor-actions button:disabled{opacity:.5;cursor:not-allowed}
+.photo-editor-status{margin:12px 0 0;color:#62645c;font-size:12px;line-height:1.55}
+.profile-link-avatar,.sidebar-avatar,.preview-avatar,.freelancer-avatar{overflow:hidden;border-radius:50%}
+.has-avatar-image img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.view-public-profile{display:inline-flex;align-items:center;border:1px solid #1f201d;background:#1f201d;color:#fff;padding:10px 12px;font:700 11px 'Courier New',monospace;white-space:nowrap;transition:background .15s}
+.view-public-profile:hover{background:#c94338;border-color:#c94338;color:#fff}
+.public-profile-main{max-width:1170px;margin:0 auto;padding:38px 32px 80px;min-height:70vh}
+.public-back-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:40px}
+.public-readonly-label{font:700 10px 'Courier New',monospace;letter-spacing:.08em;color:#787970}
+.public-hero{display:flex;gap:34px;align-items:center;background:#fff;border:1px solid #cbccc5;padding:40px;margin-bottom:55px}
+.public-hero-avatar{width:138px;height:138px;flex:none;display:grid;place-items:center;border-radius:50%;overflow:hidden;background:#191a17;color:#fff;font-size:44px;font-weight:900}
+.public-hero-details{min-width:0}
+.public-hero h1{font-size:clamp(35px,5vw,65px);font-weight:900;letter-spacing:-.065em;line-height:1.05;overflow-wrap:anywhere;margin:12px 0}
+.public-hero-headline{font-weight:700;font-size:17px;color:#555751;margin:0 0 18px}
+.public-meta{display:flex;flex-wrap:wrap;gap:13px;font:700 11px 'Courier New',monospace;color:#a44238}
+.public-meta span{background:#f8eee9;padding:9px 12px}
+.public-section{margin:40px 0}
+.public-bio{font-size:15px;line-height:1.85;color:#50514c;white-space:pre-wrap;overflow-wrap:anywhere;max-width:800px}
+.public-project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.public-project-card{border:1px solid #cecec6;background:#fff;padding:26px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.public-project-card .card-category{font:700 10px 'Courier New',monospace;color:#ab3b33;text-transform:uppercase}
+.public-project-card h3{font-size:22px;letter-spacing:-.045em;margin:0;overflow-wrap:anywhere}
+.public-project-card p{font-size:13px;line-height:1.75;color:#696b63;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.public-project-link{font:700 12px 'Courier New',monospace;text-decoration:underline;margin-top:auto;padding-top:12px}
+.public-privacy-note{border-top:1px solid #cecec6;color:#696b63;font-size:12px;line-height:1.7;padding-top:24px;margin-top:55px}
+.public-profile-body .loading-state{padding:40px 0}
+@media(max-width:760px){.public-profile-main{padding:25px 20px 60px}.public-hero{padding:26px;gap:22px}.public-hero-avatar{width:88px;height:88px;font-size:31px}.public-project-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.public-back-row{align-items:flex-start;flex-direction:column}.public-hero{flex-direction:column;align-items:flex-start}.public-hero-avatar{width:95px;height:95px}.freelancer-card-foot{flex-wrap:wrap}.view-public-profile{width:100%;justify-content:center}.photo-editor{padding:16px}.photo-editor-row{flex-wrap:wrap}}
