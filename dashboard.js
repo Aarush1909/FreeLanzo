@@ -1,16 +1,20 @@
 /* FreeLanzo Phase 3 workspace. Real Firebase data, no demo accounts/messages. */
-import { onAuthStateChanged, signOut, updateProfile as updateAuthProfile } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+import {
+  onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup,
+  reauthenticateWithCredential, GoogleAuthProvider, EmailAuthProvider,
+  updateProfile as updateAuthProfile
+} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 import {
   collection, deleteDoc, doc, getDoc, getDocs, limit, query, startAfter,
   serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
-import { AVATAR_MAX_BYTES, initials, isAvatarUrl, optimizeAvatar, renderAvatar, uploadAvatar } from "./avatar.js";
-
+import { AVATAR_MIN_BYTES, AVATAR_MAX_BYTES, isAvatarUrl, optimizeAvatar, renderAvatar, uploadAvatar } from "./avatar.js";
+import { selectAvatarCrop } from "./avatar-crop.js";
 const ROLE = document.body.dataset.role;
 const VALID_VIEWS = new Set(ROLE === "freelancer"
   ? ["home", "profile", "portfolios", "explore", "messages", "settings"]
-  : ["home", "profile", "explore", "messages", "settings"]);
+  : ["home", "profile", "explore", "saved", "messages", "settings"]);
 // Remove typical email and telephone patterns before writing PUBLIC copies.
 // Private saved text is not modified; don't treat this as a full PII detection system.
 function hideContactDetails(value) {
@@ -29,7 +33,9 @@ const publicDocument = () => doc(db, "publicFreelancers", state.user.uid);
 const portfolioCollection = () => collection(db, "users", state.user.uid, "portfolios");
 const publicProjectsCollection = () => collection(db, "publicFreelancers", state.user.uid, "projects");
 const publicProjectRef = id => doc(db, "publicFreelancers", state.user.uid, "projects", id);
-const state = { user: null, profile: null, published: false, portfolios: [], freelancers: [], directoryLoaded: false, portfoliosLoaded: false, editId: null, loaded: false, photoBlob: null, photoObjectUrl: null };
+const savedCollection = () => collection(db, "users", state.user.uid, "savedFreelancers");
+const savedRef = freelancerUid => doc(db, "users", state.user.uid, "savedFreelancers", freelancerUid);
+const state = { deletingAccount: false, user: null, profile: null, published: false, portfolios: [], freelancers: [], directoryLoaded: false, portfoliosLoaded: false, editId: null, loaded: false, photoBlob: null, photoObjectUrl: null, savedIds: new Set(), savedLoaded: false, savedFreelancers: [] };
 // Landing-category deep links: validate against the same options used by Explore.
 const incomingCategory = new URLSearchParams(location.search).get("category");
 const selectedCategory = categories.includes(incomingCategory) ? incomingCategory : "";
@@ -37,7 +43,7 @@ let noticeTimer;
 
 function readableError(error) {
   console.error("FreeLanzo dashboard operation failed:", error);
-  if (error?.code === "permission-denied") return "Permission denied. Publish the Phase 3 Firestore rules in Firebase Console, then try again.";
+  if (error?.code === "permission-denied") return "Permission denied. Publish the updated Phase 3.3 Firestore rules in Firebase Console, then try again.";
   if (error?.code === "unavailable" || error?.code === "auth/network-request-failed") return "Firebase is temporarily unavailable. Check your connection and try again.";
   if (error?.code === "failed-precondition") return "A Firestore index may be missing. Check the Firebase console error for an index link.";
   return "This action could not be completed. Please try again and check the browser console if it continues.";
@@ -87,10 +93,14 @@ function drawName() {
 }
 function populateProfile() {
   const form = $("#profile-form");
-  for (const key of ["displayName", "headline", "bio", "location", "skills", "category"]) {
+  // Prepopulate every editable field, including Phase 3.3 filter metadata.
+  // Without these two fields a returning freelancer might accidentally clear
+  // their experience/availability the next time they save another detail.
+  for (const key of ["displayName", "headline", "bio", "location", "skills", "category", "experienceLevel", "availability"]) {
     if (form.elements[key]) form.elements[key].value = state.profile[key] || "";
   }
   drawName();
+  updateCompletion();
 }
 function publicData(p = state.profile) {
   return {
@@ -102,6 +112,8 @@ function publicData(p = state.profile) {
     category: p.category || "",
     location: hideContactDetails(p.location),
     avatarURL: isAvatarUrl(p.avatarURL) ? p.avatarURL : "",
+    experienceLevel: p.experienceLevel || "",
+    availability: p.availability || "",
     published: true,
     updatedAt: serverTimestamp()
   };
@@ -119,6 +131,7 @@ async function loadPortfolios() {
   state.portfolios = results.docs.map(item => ({ id: item.id, ...item.data() }));
   state.portfolios.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   state.portfoliosLoaded = true;
+  updateCompletion();
   setText("stat-portfolios", state.portfolios.length);
   setText("portfolio-count", state.portfolios.length);
   renderPortfolios();
@@ -247,6 +260,14 @@ async function saveProfile(event) {
     if (skills.some(skill => skill.length > 40)) { notify("Keep each skill under 40 characters."); return; }
     updates.skills = skills.join(", ");
     updates.category = category;
+    const experienceLevel = form.elements.experienceLevel.value;
+    const availability = form.elements.availability.value;
+    if (!["", "Beginner", "Intermediate", "Expert"].includes(experienceLevel) ||
+        !["", "Available", "Busy"].includes(availability)) {
+      notify("Choose a valid experience level and availability."); return;
+    }
+    updates.experienceLevel = experienceLevel;
+    updates.availability = availability;
   }
   const button = $("#save-profile"); button.disabled = true;
   try {
@@ -259,6 +280,7 @@ async function saveProfile(event) {
     } else await updateDoc(userDocument(), updates);
     state.profile = { ...state.profile, ...updates };
     drawName();
+    updateCompletion();
     try { await updateAuthProfile(state.user, { displayName }); } catch (e) { console.warn("Auth display name update skipped", e); }
     notify("Profile saved successfully.", true);
     if (state.directoryLoaded && ROLE === "freelancer") state.directoryLoaded = false;
@@ -326,8 +348,14 @@ async function loadFreelancers() {
 function renderFreelancers() {
   const search = ($("#explore-search")?.value || "").trim().toLowerCase();
   const category = $("#explore-category")?.value || "";
+  const skill = ($("#explore-skill")?.value || "").trim().toLowerCase();
+  const experience = $("#explore-experience")?.value || "";
+  const availability = $("#explore-availability")?.value || "";
   const matches = state.freelancers.filter(f => (!category || f.category === category) &&
-    [f.displayName, f.headline, f.skills, f.bio, f.category].some(s => String(s || "").toLowerCase().includes(search)));
+    (!experience || f.experienceLevel === experience) &&
+    (!availability || f.availability === availability) &&
+    (!skill || String(f.skills || "").toLowerCase().includes(skill)) &&
+    [f.displayName, f.headline, f.skills, f.bio, f.category].some(text => String(text || "").toLowerCase().includes(search)));
   setText("explore-count", `${matches.length} freelancer${matches.length === 1 ? "" : "s"} shown${state.freelancers.length === 80 ? " (first 80 published profiles)" : ""}`);
   const wrap = $("#freelancer-results"); if (!wrap) return;
   wrap.replaceChildren();
@@ -345,6 +373,10 @@ function renderFreelancers() {
     head.append(icon, nameBox);
     card.append(head, node("p", "headline", freelancer.headline || "Open to creative work"));
     if (freelancer.bio) card.append(node("p", "bio", freelancer.bio));
+    if (freelancer.experienceLevel || freelancer.availability) {
+      const meta = node("p", "freelancer-meta", [freelancer.experienceLevel, freelancer.availability === "Available" ? "Available for work" : freelancer.availability === "Busy" ? "Currently busy" : ""].filter(Boolean).join(" · "));
+      card.append(meta);
+    }
     const skills = (freelancer.skills || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 8);
     if (skills.length) {
       const tags = node("div", "skill-tags");
@@ -355,6 +387,13 @@ function renderFreelancers() {
     const view = node("a", "view-public-profile", "View full profile ↗");
     view.href = `freelancer-profile.html?id=${encodeURIComponent(freelancer.uid)}`;
     foot.append(node("span", "", freelancer.location || "Location not specified"), view);
+    if (ROLE === "client" && freelancer.uid !== state.user.uid) {
+      const save = node("button", "btn-save-freelancer", state.savedIds.has(freelancer.uid) ? "★ Saved" : "☆ Save");
+      save.type = "button";
+      save.dataset.saveFreelancer = freelancer.uid;
+      save.setAttribute("aria-pressed", String(state.savedIds.has(freelancer.uid)));
+      foot.append(save);
+    }
     card.append(foot);
     wrap.append(card);
   }
@@ -365,12 +404,16 @@ async function updateAvatarURL(url) {
   if (ROLE === "freelancer" && state.published) {
     const batch = writeBatch(db);
     batch.update(userDocument(), updates);
-    batch.update(publicDocument(), updates);
+    // Rebuild the public allowlisted snapshot as well as updating the photo.
+    // This migrates old Phase 3.1 published docs that predate Phase 3.3 fields
+    // (experienceLevel / availability) expected by the new security rules.
+    batch.set(publicDocument(), publicData({ ...state.profile, ...updates }));
     await batch.commit();
   } else await updateDoc(userDocument(), updates);
   state.profile = { ...state.profile, avatarURL: url };
   state.directoryLoaded = false;
   drawName();
+  updateCompletion();
 }
 function clearPhotoSelection() {
   if (state.photoObjectUrl) URL.revokeObjectURL(state.photoObjectUrl);
@@ -385,9 +428,15 @@ async function onChoosePhoto(event) {
   clearPhotoSelection();
   if (!file) return;
   try {
-    if (file.size > AVATAR_MAX_BYTES) throw new Error("That picture is over 500 KB. Please choose a smaller file.");
-    $("#photo-status").textContent = "Preparing your photo…";
-    const blob = await optimizeAvatar(file);
+    if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) throw new Error("Choose a photo between 100 KB and 200 KB.");
+    $("#photo-status").textContent = "Adjust your crop, then confirm to prepare the photo.";
+    const crop = await selectAvatarCrop(file);
+    if (!crop) {
+      $("#photo-status").textContent = "Crop cancelled. Your saved photo was not changed.";
+      return;
+    }
+    $("#photo-status").textContent = "Compressing your cropped photo…";
+    const blob = await optimizeAvatar(file, crop);
     state.photoBlob = blob;
     state.photoObjectUrl = URL.createObjectURL(blob);
     const preview = $("#photo-preview");
@@ -428,6 +477,157 @@ async function onRemovePhoto() {
     button.disabled = false;
   }
 }
+// Phase 3.3 — profile completion uses real saved fields, not fabricated scores.
+function updateCompletion() {
+  if (!state.profile) return;
+  const p = state.profile;
+  const checks = [
+    ["Display name", (p.displayName || "").trim().length >= 2],
+    ["Headline", Boolean((p.headline || "").trim())],
+    ["Location", Boolean((p.location || "").trim())],
+    ["Bio", Boolean((p.bio || "").trim())],
+    ["Profile photo", isAvatarUrl(p.avatarURL)]
+  ];
+  if (ROLE === "freelancer") checks.push(
+    ["Skills", Boolean((p.skills || "").trim())],
+    ["Category", categories.includes(p.category)],
+    ["Experience level", Boolean(p.experienceLevel)],
+    ["Availability", Boolean(p.availability)],
+    ["At least one portfolio project", state.portfolios.length > 0]
+  );
+  const done = checks.filter(([,ok]) => ok).length;
+  const percent = Math.round(100 * done / checks.length);
+  setText("completion-percent", `${percent}%`);
+  $("#completion-fill").style.width = `${percent}%`;
+  $("#completion-bar").setAttribute("aria-valuenow", String(percent));
+  const missing = checks.filter(([,ok]) => !ok).map(([label]) => label);
+  setText("completion-hint", missing.length ? `Next: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}` : "Your profile is complete!");
+}
+
+// Phase 3.3 — clients keep private saved freelancer IDs in Firestore.
+async function loadSavedIds() {
+  if (ROLE !== "client") return;
+  const results = await getDocs(query(savedCollection(), limit(100)));
+  state.savedIds = new Set(results.docs.map(item => item.id));
+  state.savedLoaded = true;
+  if (state.directoryLoaded) renderFreelancers();
+}
+async function loadSavedFreelancers() {
+  if (ROLE !== "client") return;
+  await loadSavedIds();
+  const target = $("#saved-results");
+  target.replaceChildren();
+  if (!state.savedIds.size) {
+    setText("saved-count", "0 saved freelancers");
+    target.append(emptyState("No saved freelancers", "Visit Explore and select ☆ Save on a profile to bookmark it."));
+    return;
+  }
+  const saved = await Promise.all([...state.savedIds].map(async uid => {
+    try {
+      const snap = await getDoc(doc(db, "publicFreelancers", uid));
+      return snap.exists() && snap.data().published ? {uid, ...snap.data()} : {uid, unpublished: true};
+    } catch { return {uid, unpublished: true}; }
+  }));
+  setText("saved-count", `${saved.length} saved freelancer${saved.length === 1 ? "" : "s"}`);
+  for (const item of saved) {
+    const card = node("article", "freelancer-card");
+    if (item.unpublished) {
+      card.append(node("h3", "", "Unavailable freelancer"), node("p", "", "This profile is hidden or has been removed."));
+    } else {
+      const row = node("div", "freelancer-card-head");
+      const avatar = node("div", "freelancer-avatar");
+      renderAvatar(avatar, item.avatarURL, item.displayName);
+      row.append(avatar, node("h3", "", item.displayName || "Freelancer"));
+      card.append(row, node("p", "", item.headline || item.category || "Freelancer"));
+      const view = node("a", "view-public-profile", "View full profile ↗");
+      view.href = `freelancer-profile.html?id=${encodeURIComponent(item.uid)}`;
+      card.append(view);
+    }
+    const remove = node("button", "btn-save-freelancer", "★ Remove from saved");
+    remove.type = "button";
+    remove.dataset.saveFreelancer = item.uid;
+    card.append(remove);
+    target.append(card);
+  }
+}
+async function onSavedAction(event) {
+  const button = event.target.closest("[data-save-freelancer]");
+  if (!button || ROLE !== "client") return;
+  const uid = button.dataset.saveFreelancer;
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(uid)) return;
+  button.disabled = true;
+  try {
+    if (state.savedIds.has(uid)) {
+      await deleteDoc(savedRef(uid));
+      state.savedIds.delete(uid);
+      notify("Freelancer removed from saved list.", true);
+    } else {
+      await setDoc(savedRef(uid), { freelancerUid: uid, createdAt: serverTimestamp() });
+      state.savedIds.add(uid);
+      notify("Freelancer saved.", true);
+    }
+    renderFreelancers();
+    if (!$("[data-view='saved']").hidden) await loadSavedFreelancers();
+  } catch (err) { notify(readableError(err)); button.disabled = false; }
+}
+
+async function deleteCollectionInPages(ref) {
+  // Delete child documents before deleting the parent. Firestore does not
+  // cascade subcollections when a parent is deleted.
+  while (true) {
+    const found = await getDocs(query(ref, limit(100)));
+    if (found.empty) break;
+    const batch = writeBatch(db);
+    found.docs.forEach(item => batch.delete(item.ref));
+    await batch.commit();
+    if (found.size < 100) break;
+  }
+}
+async function permanentlyDeleteAccount() {
+  const button = $("#delete-account");
+  const status = $("#delete-account-status");
+  if ($("#delete-confirm").value.trim() !== "DELETE") {
+    status.textContent = "Type DELETE exactly before deleting your account.";
+    return;
+  }
+  if (!confirm("Permanently delete your FreeLanzo account and associated Firestore data? This cannot be undone.")) return;
+  button.disabled = true;
+  status.textContent = "Verifying your identity…";
+  try {
+    if (state.profile.provider === "google.com") {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({prompt: "select_account"});
+      await reauthenticateWithPopup(state.user, provider);
+    } else {
+      const password = $("#delete-password").value;
+      if (!password) throw new Error("Enter your current password before deleting your account.");
+      await reauthenticateWithCredential(state.user,
+        EmailAuthProvider.credential(state.user.email, password));
+    }
+    status.textContent = "Deleting stored FreeLanzo data…";
+    await deleteCollectionInPages(portfolioCollection());
+    await deleteCollectionInPages(savedCollection());
+    await deleteCollectionInPages(publicProjectsCollection());
+    const batch = writeBatch(db);
+    if (ROLE === "freelancer") batch.delete(publicDocument());
+    batch.delete(userDocument());
+    await batch.commit();
+    status.textContent = "Removing Firebase sign-in…";
+    // Do not delete Auth identity until Firestore owner-owned data is removed.
+    state.deletingAccount = true;
+    await deleteUser(state.user);
+    location.replace("index.html");
+  } catch (error) {
+    state.deletingAccount = false;
+    console.error("Account deletion did not finish:", error);
+    status.textContent = error?.message || readableError(error);
+    if (error?.code === "auth/requires-recent-login") {
+      status.textContent = "Authentication expired. Please sign in again and retry account deletion.";
+    }
+    button.disabled = false;
+  }
+}
+
 async function openView(view, push = false) {
   const name = VALID_VIEWS.has(view) ? view : "home";
   if (push) history.pushState(null, "", `${location.pathname}?view=${name}`);
@@ -437,7 +637,7 @@ async function openView(view, push = false) {
     link.classList.toggle("is-current", current);
     if (current) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
   });
-  document.title = `${({ home: "Dashboard Home", profile: "My Profile", portfolios: "My Portfolios", explore: "Explore Freelancers", messages: "Messages", settings: "Settings" })[name]} — FreeLanzo`;
+  document.title = `${({ home: "Dashboard Home", profile: "My Profile", portfolios: "My Portfolios", explore: "Explore Freelancers", saved: "Saved Freelancers", messages: "Messages", settings: "Settings" })[name]} — FreeLanzo`;
   $("#main-nav")?.classList.remove("is-open");
   $("#menu-toggle")?.setAttribute("aria-expanded", "false");
   if (name === "portfolios" && !state.portfoliosLoaded) {
@@ -445,6 +645,9 @@ async function openView(view, push = false) {
   }
   if (name === "explore" && !state.directoryLoaded) {
     try { await loadFreelancers(); } catch (err) { notify(readableError(err)); }
+  }
+  if (name === "saved" && ROLE === "client") {
+    try { await loadSavedFreelancers(); } catch (err) { notify(readableError(err)); }
   }
   window.scrollTo({ top: 0, behavior: "auto" });
 }
@@ -474,6 +677,21 @@ function attachEvents() {
   }
   $("#explore-search").addEventListener("input", renderFreelancers);
   $("#explore-category").addEventListener("change", renderFreelancers);
+  $("#explore-skill").addEventListener("input", renderFreelancers);
+  $("#explore-experience").addEventListener("change", renderFreelancers);
+  $("#explore-availability").addEventListener("change", renderFreelancers);
+  $("#explore-clear").addEventListener("click", () => {
+    for (const id of ["explore-search", "explore-category", "explore-skill", "explore-experience", "explore-availability"]) {
+      $("#" + id).value = "";
+    }
+    renderFreelancers();
+  });
+  if (ROLE === "client") {
+    $("#freelancer-results").addEventListener("click", onSavedAction);
+    $("#saved-results").addEventListener("click", onSavedAction);
+  }
+  $("#delete-account").addEventListener("click", permanentlyDeleteAccount);
+  $("#delete-password-wrap").hidden = state.profile.provider === "google.com";
   $("#explore-refresh").addEventListener("click", async () => {
     try { await loadFreelancers(); notify("Directory refreshed.", true); }
     catch (err) { notify(readableError(err)); }
@@ -490,7 +708,7 @@ function attachEvents() {
 }
 
 onAuthStateChanged(auth, async user => {
-  if (!user) { location.replace("login.html"); return; }
+  if (!user) { if (!state.deletingAccount) location.replace("login.html"); return; }
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
     if (!snap.exists() || !["freelancer", "client"].includes(snap.data().role)) {
@@ -511,6 +729,9 @@ onAuthStateChanged(auth, async user => {
     populateProfile();
     if (selectedCategory) $("#explore-category").value = selectedCategory;
     attachEvents();
+    if (ROLE === "client") {
+      try { await loadSavedIds(); } catch (err) { notify(readableError(err)); }
+    }
     $("#page-status").hidden = true;
     $("#workspace").hidden = false;
     if (ROLE === "freelancer") {

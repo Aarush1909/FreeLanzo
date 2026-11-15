@@ -160,3 +160,21 @@
 .public-profile-body .loading-state{padding:40px 0}
 @media(max-width:760px){.public-profile-main{padding:25px 20px 60px}.public-hero{padding:26px;gap:22px}.public-hero-avatar{width:88px;height:88px;font-size:31px}.public-project-grid{grid-template-columns:1fr}}
 @media(max-width:520px){.public-back-row{align-items:flex-start;flex-direction:column}.public-hero{flex-direction:column;align-items:flex-start}.public-hero-avatar{width:95px;height:95px}.freelancer-card-foot{flex-wrap:wrap}.view-public-profile{width:100%;justify-content:center}.photo-editor{padding:16px}.photo-editor-row{flex-wrap:wrap}}
+
+/* Phase 3.3 crop modal: square output with circular avatar guide. */
+.avatar-crop-dialog{box-sizing:border-box;width:min(94vw,490px);max-height:92vh;overflow:auto;border:1px solid var(--line,#d3d4ce);border-radius:4px;padding:24px;background:var(--surface,#fff);color:var(--text,#171817);box-shadow:0 18px 80px #0005}
+.avatar-crop-dialog::backdrop{background:rgba(0,0,0,.68)}
+.avatar-crop-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}
+.avatar-crop-heading h2{font-size:28px;line-height:1.2;margin:5px 0 0}
+.avatar-crop-close{background:transparent;border:1px solid #999;padding:8px 12px;cursor:pointer;color:inherit}
+.avatar-crop-help{font-size:13px;line-height:1.55;margin:12px 0;color:inherit;opacity:.8}
+.avatar-crop-stage{position:relative;width:min(100%,340px);margin:0 auto;aspect-ratio:1;overflow:hidden;background:#202020;touch-action:none;user-select:none}
+.avatar-crop-stage canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none;outline-offset:-4px}
+.avatar-crop-stage canvas:active{cursor:grabbing}
+.avatar-crop-ring{pointer-events:none;position:absolute;inset:0;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 100px rgba(0,0,0,.38),inset 0 0 0 1px #0005}
+.avatar-crop-zoom-label{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-top:18px}
+.avatar-crop-zoom{display:block;width:100%;accent-color:#ee4b45;margin:10px 0 18px}
+.avatar-crop-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.avatar-crop-actions .btn{min-height:42px}
+.avatar-crop-error{color:#c53030;font-size:13px}
+@media(max-width:520px){.avatar-crop-dialog{padding:16px}.avatar-crop-heading h2{font-size:23px}}

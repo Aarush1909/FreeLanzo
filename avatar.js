@@ -1,8 +1,9 @@
 import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET } from "./cloudinary-config.js";
 
-// Strict browser-side input and output cap: 500,000 bytes (500 decimal KB).
-// Cloudinary UNSIGNED presets cannot enforce a per-preset file-size cap on the server.
-export const AVATAR_MAX_BYTES = 500000;
+// 100-200 decimal KB for selected file AND processed upload blob, browser side.
+// This does not provide a server-side Cloudinary upload restriction.
+export const AVATAR_MIN_BYTES = 100000;
+export const AVATAR_MAX_BYTES = 200000;
 export const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function initials(name) {
@@ -50,30 +51,39 @@ function loadImage(file) {
 function toBlob(canvas, type, quality) {
   return new Promise(resolve => canvas.toBlob(resolve, type, quality));
 }
-export async function optimizeAvatar(file) {
+export async function optimizeAvatar(file, crop = null) {
   if (!ACCEPTED_IMAGE_TYPES.has(file.type)) throw new Error("Choose a JPG, PNG, or WebP image.");
-  if (!file.size) throw new Error("The image is empty.");
-  if (file.size > AVATAR_MAX_BYTES) throw new Error("Choose a picture under 500 KB. Compress it first, then upload again.");
+  if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) {
+    throw new Error("Choose an original photo between 100 KB and 200 KB (100,000–200,000 bytes).");
+  }
   const img = await loadImage(file);
-  if (img.naturalWidth < 1 || img.naturalHeight < 1) throw new Error("Invalid image dimensions.");
-  const canvas = document.createElement("canvas");
-  canvas.width = 400;
-  canvas.height = 400;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("This browser cannot process the image.");
-  const side = Math.min(img.naturalWidth, img.naturalHeight);
-  // Always take the centered square; conversion strips image metadata.
-  ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 400, 400);
-  for (const quality of [0.86, 0.76, 0.62, 0.48, 0.35]) {
-    const blob = await toBlob(canvas, "image/webp", quality);
-    if (blob && blob.type === "image/webp" && blob.size <= AVATAR_MAX_BYTES) return blob;
+  if (!img.naturalWidth || !img.naturalHeight) throw new Error("Invalid image dimensions.");
+  const side = Math.min(img.naturalWidth, img.naturalHeight) / Math.max(1, Math.min(4, Number(crop?.zoom) || 1));
+  const centerX = Math.max(side / 2, Math.min(img.naturalWidth - side / 2, (Number(crop?.centerX) || 0.5) * img.naturalWidth));
+  const centerY = Math.max(side / 2, Math.min(img.naturalHeight - side / 2, (Number(crop?.centerY) || 0.5) * img.naturalHeight));
+  const choices = [];
+  // Keep the center square. Try several resolutions/qualities to find an upload
+  // between 100 KB and 200 KB, without padding fake bytes into the image.
+  for (const dimension of [400, 600, 800, 1000]) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = dimension;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("This browser cannot process images.");
+    ctx.drawImage(img, centerX - side / 2, centerY - side / 2,
+      side, side, 0, 0, dimension, dimension);
+    for (const mime of ["image/webp", "image/jpeg"]) {
+      for (const quality of [0.96, 0.90, 0.82, 0.72, 0.60, 0.48]) {
+        const blob = await toBlob(canvas, mime, quality);
+        if (!blob || blob.type !== mime) continue;
+        if (blob.size >= AVATAR_MIN_BYTES && blob.size <= AVATAR_MAX_BYTES) {
+          choices.push(blob);
+          // Choose a high quality valid output; no need to try larger canvases.
+          return choices[0];
+        }
+      }
+    }
   }
-  // Fallback: a small JPEG for browsers without WebP encoding support.
-  for (const quality of [0.7, 0.5, 0.3]) {
-    const blob = await toBlob(canvas, "image/jpeg", quality);
-    if (blob && blob.size <= AVATAR_MAX_BYTES) return blob;
-  }
-  throw new Error("Couldn't fit this image under 500 KB. Try another picture.");
+  throw new Error("This photo cannot be converted into a 100–200 KB square without losing too much detail. Try a different image.");
 }
 
 export async function uploadAvatar(blob) {
@@ -81,7 +91,8 @@ export async function uploadAvatar(blob) {
       !CLOUDINARY_UPLOAD_PRESET || CLOUDINARY_UPLOAD_PRESET.includes("REPLACE_WITH_")) {
     throw new Error("Cloudinary isn't configured. Add your Cloud name and unsigned upload preset in js/cloudinary-config.js.");
   }
-  if (!blob || blob.size > AVATAR_MAX_BYTES) throw new Error("Image exceeds 500 KB.");
+  if (!blob || blob.size < AVATAR_MIN_BYTES || blob.size > AVATAR_MAX_BYTES)
+    throw new Error("Upload photo must be between 100 KB and 200 KB.");
   const formData = new FormData();
   formData.append("file", blob, blob.type === "image/webp" ? "freelanzo-avatar.webp" : "freelanzo-avatar.jpg");
   formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
@@ -91,6 +102,7 @@ export async function uploadAvatar(blob) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result?.error?.message || `Cloudinary upload failed (${response.status}).`);
   if (!isAvatarUrl(result.secure_url)) throw new Error("Cloudinary returned an invalid image URL.");
-  if (result.bytes && result.bytes > AVATAR_MAX_BYTES) throw new Error("The uploaded image exceeds 500 KB after processing.");
+  if (result.bytes && (result.bytes < AVATAR_MIN_BYTES || result.bytes > AVATAR_MAX_BYTES))
+    throw new Error("Cloudinary changed the uploaded photo outside the 100–200 KB range. Try another picture.");
   return result.secure_url;
 }

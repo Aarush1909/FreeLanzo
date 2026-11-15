@@ -1,3 +1,45 @@
+# FreeLanzo Phase 3.3 — Experience & Privacy (November 15, 2026)
+
+Built from **Phase 3.2 Google Auth + guest-navigation fix**, preserving all earlier functionality. Adds all six discussed enhancements and the two requested changes:
+
+1. **Multilingual UI:** header language selector on the landing page, authentication, dashboards, and public profiles. English / Hindi / Marathi strings are stored in `js/ui-preferences.js`, and the selection persists in `localStorage`. Core navigation, actions, form labels, categories and major interface text are translated. Some decorative marketing descriptions, dynamic error notices, and user-written profiles/projects remain in the original language; this is not full machine translation.
+2. **Profile completion:** transparent field-by-field percentage on both dashboards' Home view. Freelancer includes portfolio, skills, category, experience and availability; Client uses five standard profile fields. Progress updates when profile/photo/project data changes.
+3. **Save freelancers:** **Clients only** can save/remove published freelancers in Explore and view them in **Saved Freelancers**. Bookmarks stored privately in `users/{clientUid}/savedFreelancers/{freelancerUid}`. Removed/unpublished people appear as unavailable with a remove action. Only the client can read their own list.
+4. **Light/Dark mode:** global theme button in header; preference saved in `localStorage`. CSS stays compatible with the original minimalist theme.
+5. **Advanced directory filters:** skill search, experience level (Beginner/Intermediate/Expert), availability (Available/Busy), plus existing name search/category, and Clear Filters. Freelancers can set experience and availability on My Profile. Older profiles without the new fields still appear with no advanced filter selected.
+6. **Privacy & deletion:** existing freelancer visibility controls retained. Both roles can request full deletion via Settings. Requires typing `DELETE` plus password reauthentication or Google reauthentication. Deletes their own Firestore portfolios, saved bookmarks, public projects/profile and private user profile; then deletes the Firebase Authentication identity. **Do not use this client-side demo deletion approach in production:** network failures can partially complete deletion and require administrator assistance, Cloudinary unsigned assets are **not** deleted by the browser, and references held in other clients' saved lists are not globally cleaned. A production app needs a trusted backend for reliable orchestration and Cloudinary deletion.
+7. **Automatic login role:** role-selection inputs are **removed from login.html only**. Signup still asks Freelancer/Client and saves it at registration. On login the role is verified from private Firestore `users/{uid}` and `dashboard.html` routes to the matching dashboard. Google signup still rejects an already registered FreeLanzo profile.
+8. **Photo size now 100–200 KB (decimal):** both the selected original JPG/PNG/WebP image **and** the processed upload image must be between 100,000 and 200,000 bytes. Image processing crops centrally and searches for a compliant output at multiple resolutions; images that cannot fit the range are rejected with an explanation. This is **browser-side validation only**. A Cloudinary unsigned preset is publicly callable outside the app and cannot enforce this limit without a verified backend.
+
+**Phase 3.3 compatibility fixes:** Existing saved freelancer experience and availability values are loaded back into the edit form. Updating a published avatar rebuilds its public record with the new fields, so older Phase 3.1 profiles work with the revised Firestore rules. Category navigation uses canonical English URL parameters even while interface labels are translated.
+
+## REQUIRED DEPLOYMENT STEPS
+
+1. Back up the working FreeLanzo directory and replace with this package, including new `preferences.css` and `js/ui-preferences.js`.
+2. In **Firebase Console → Firestore Database → Rules**, paste **this updated `firestore.rules`** and click **Publish**. **This is essential** for saved bookmarks, new experience/availability profile fields, and account deletion. If you already implemented later phases, **merge** the rules instead of blindly replacing them.
+3. Push the repository to GitHub Pages and refresh with Ctrl+Shift+R. Your Firebase and Cloudinary identifiers are already present; don't commit API secrets.
+4. Test on a separate temporary account; **avoid testing account deletion on a real account**.
+
+## PHASE 3.3 CHECKLIST
+
+- [ ] Login with email and Google **without selecting a role**; both account roles route correctly.
+- [ ] Signup still collects Freelancer/Client role; Google signup using an existing FreeLanzo profile shows an error.
+- [ ] English/Hindi/Marathi switches core UI labels; refresh and confirm selected language persists.
+- [ ] Toggle dark/light theme; refresh and check mobile and desktop contrast.
+- [ ] Profile completion changes after saving bio, photo, and portfolio fields.
+- [ ] A Client can save a published freelancer, see it under Saved Freelancers, remove it, and cannot read another client's saved list.
+- [ ] Freelancer saves Experience and Availability; advanced Explore filters match these values.
+- [ ] Original photo below 100 KB and above 200 KB are rejected; photo within range is processed to an upload of 100–200 KB or a clear validation error.
+- [ ] Test freelancer visibility and existing portfolio CRUD; signed-out guests still see the homepage category notice.
+- [ ] On a **disposable test account only**, confirm the delete flow reauthenticates and removes Firestore/Auth account data. Confirm Cloudinary asset deletion still requires an administrator.
+
+## Updated files relative to Phase 3.2 Google Auth Fix
+
+Modified: `login.html`, `index.html`, `signup.html`, `reset-password.html`, `terms.html`, `privacy.html`, `freelancer-profile.html`, `freelancer-dashboard.html`, `client-dashboard.html`, `js/auth-pages.js`, `js/avatar.js`, `js/dashboard.js`, `script.js`, `firestore.rules`, `README.md`.
+New: `js/ui-preferences.js`, `preferences.css`.
+
+---
+
 # FreeLanzo Phase 3.2 — Landing category → filtered Explore
 
 This is an incremental Phase 3.1 update. All existing authentication, dashboards, profiles, projects, and photos are preserved.
@@ -63,14 +105,14 @@ export const CLOUDINARY_CLOUD_NAME = "your_cloud_name";
 export const CLOUDINARY_UPLOAD_PRESET = "freelanzo_profile_photos";
 ```
 
-6. Save, reload the page, and try uploading a photo under 500 KB from **My Profile**.
+6. Save, reload the page, and try uploading a photo between 100 and 200 KB from **My Profile**.
 
-**Important security/limits:** This static-hosting version uploads directly to a Cloudinary **unsigned** preset. The browser rejects files above **500,000 bytes (500 KB)** and normalizes them to a 400×400 square before upload. Cloudinary does **not** offer a per-unsigned-preset server-enforced file-size limit; an attacker using the public preset outside this UI can bypass browser checks. For a production site that needs a strict back-end 500 KB limit or per-user upload permission, add a verified Firebase Auth backend that validates the file and performs signed uploads. Unsigned uploads also require external Cloudinary administration to delete files; pressing **Remove photo** removes the URL from FreeLanzo, but does not delete the Cloudinary asset itself. Never commit a Cloudinary API secret to this repository.
+**Important security/limits:** This static-hosting version uploads directly to a Cloudinary **unsigned** preset. The browser rejects files above **100,000–200,000 bytes (100–200 KB)** and normalizes them to a center-cropped square (400–1000 px, as needed) before upload. Cloudinary does **not** offer a per-unsigned-preset server-enforced file-size limit; an attacker using the public preset outside this UI can bypass browser checks. For a production site that needs a strict server-side 100–200 KB limit or per-user upload permission, add a verified Firebase Auth backend that validates the file and performs signed uploads. Unsigned uploads also require external Cloudinary administration to delete files; pressing **Remove photo** removes the URL from FreeLanzo, but does not delete the Cloudinary asset itself. Never commit a Cloudinary API secret to this repository.
 
 ## 3. Photo upload and display
 
-- On Freelancer and Client dashboards → **My Profile**, choose JPG, PNG, or WebP of **500 KB or less**, preview the cropped image, then click **Upload photo**.
-- Uploaded images are converted to a 400 × 400 square and compressed (usually to WebP) before upload; we check the upload blob is also under 500 KB.
+- On Freelancer and Client dashboards → **My Profile**, choose JPG, PNG, or WebP of **100–200 KB**, preview the cropped image, then click **Upload photo**.
+- Uploaded images are converted to a center-cropped square (400–1000 px, as needed) and compressed (usually to WebP) before upload; we check the upload blob is also between 100 and 200 KB.
 - The Cloudinary HTTPS URL is stored only as `avatarURL` on the private `/users/{uid}` document and copied to the public freelancer directory only when the freelancer has explicitly published their profile.
 - The picture displays in the landing-page signed-in header, dashboard header, sidebar, profile preview, Explore listings, and published freelancer profile page.
 - **Remove photo** clears the reference from the user's profile and any published freelancer profile. Empty images show initials.
@@ -100,8 +142,8 @@ Firestore **security rules**, not hidden UI controls, enforce access. No `allow 
 ## 6. Checkpoints for testing
 
 - [ ] Existing signup (Google + email/password), login, role checks and password reset still work.
-- [ ] Freelancer and Client both upload an image under 500 KB; show it in the header, sidebar and My Profile.
-- [ ] A file over 500 KB is rejected with a message; non-image types are rejected.
+- [ ] Freelancer and Client both upload an image between 100 and 200 KB; show it in the header, sidebar and My Profile.
+- [ ] A file outside 100–200 KB is rejected with a message; non-image types are rejected.
 - [ ] Profile photos can be removed and revert to initials.
 - [ ] A freelancer who has not published does **not** appear in Explore.
 - [ ] Publish a freelancer; open their **View full profile** link as a Client.
@@ -126,3 +168,47 @@ Firestore **security rules**, not hidden UI controls, enforce access. No `allow 
 ## Notes for team demos
 
 This source bundle passed local static validation and JavaScript syntax checks. **Live Cloudinary and Firebase behavior requires your own project/preset credentials and testing in your browser.** Cloudinary free-tier allowances and availability can change, so check the provider's current plan before relying on it for a production service.
+
+## Phase 3.2 guest-category fix (November 15, 2026)
+
+**What was wrong:** Landing category cards were still ordinary links to `dashboard.html`.
+When Firebase scripts failed to load or were delayed, the login check never ran and
+an unsigned visitor landed on the "Opening your workspace" route page.
+
+**What is now different:** All fifteen cards have guest-safe `index.html` fallback URLs.
+The regular `script.js` intercepts clicks and displays the Login / Sign Up / Not now
+notice without needing Firebase. `js/category-navigation.js` reports signed-in status
+once Firebase loads; only confirmed signed-in accounts navigate to filtered Explore.
+Guest users remain on the home page, including if Firebase is offline or they use
+"Open in new tab". No database, Firebase, or Cloudinary settings need changing.
+
+**Modified files (3):** `index.html`, `script.js`, `js/category-navigation.js`.
+`README.md` was also updated (documentation only). **New files: none.**
+
+**Quick test:** Open the site with Live Server in a private/incognito window,
+click Web Development, and verify the guest prompt appears on the landing page.
+Choose Not now to dismiss. Then sign in and click the same category: you should
+reach Explore Freelancers with Web Development selected. Test Ctrl+Click on a card
+while logged out as well. Refresh with Ctrl+Shift+R if the browser cached old JS.
+
+
+### Photo crop editor (Phase 3.3 refinement)
+Selecting a JPG, PNG or WebP between 100 KB and 200 KB opens a crop dialog. Drag to reposition the square crop, use the zoom slider (1–4×), and press **Use this crop**. Keyboard users can focus the canvas and use arrow keys (Shift+arrows for larger movement). The crop is compressed to a 100–200 KB square prior to Cloudinary upload. Cancel does not change the saved profile photo. All size checks are client-side only; Cloudinary does not enforce them unless configured server-side.
+
+---
+
+## Phase 3.3 — Dark theme and Hindi/Marathi display fix (15 November 2026)
+
+This update fixes the inconsistent dark mode and partially untranslated content reported in the homepage screenshots while preserving Phase 3.3 functionality, Google/email authentication, dashboard routing, Cloudinary uploads, photo cropping and Firestore rules.
+
+- **Consistent dark mode:** Categories, How It Works, Why FreeLanzo, About, CTA, directory cards, form inputs and category guest notices now use readable dark surfaces and appropriate contrast. The intentionally dark showcase/illustrations retain their original aesthetic. Header profile card, search box, mobile menu, account/portfolio cards and legal pages have matching dark styles.
+- **Broader multilingual coverage:** Hindi and Marathi translations now cover homepage hero and section titles, descriptive copy, buttons, navigation, category guest notices/counts, account page headings, profile/directory UI, and privacy/terms pages. Dynamic directory counts and category guest notices are localized. User-provided profile and project text is intentionally not machine-translated.
+- **Better Devanagari layout:** Headings use a Devanagari-capable font fallback and adjusted tracking, line height and size; translated navigation collapses into a mobile-style menu at narrower widths.
+- **Translation accessibility:** Placeholder text, aria labels and title attributes can now be translated when a translation is provided. Language selection persists in local storage as before.
+- **Accurate copy:** Replaced stale pre-portfolio and 500 KB statements with current Phase 3.3 features and the 100–200 KB original/processed photo upload condition. Terms/Privacy remain student-project drafts and require review before production.
+
+**Files modified compared with the Phase 3.3 crop-editor package:** `preferences.css`, `js/ui-preferences.js`, `index.html`, `dashboard.html`, `privacy.html`, `terms.html`, and `README.md`. No Firebase config or Firestore rules changes required for this visual/language fix.
+
+**Verification:** All JS files passed `node --check`, stylesheets parsed, translation mappings for every static page heading were checked, and a headless Chromium static-page render confirmed dark/HI language compatibility on all 10 HTML pages. The homepage was checked in English/Hindi/Marathi at 1280/960/390px; no horizontal overflow was observed, all major sections rendered dark, and category guest notices localized correctly. These are UI tests **without a live Firebase session**; test signed-in pages with your actual Firebase setup after deployment.
+
+**Deployment:** Replace the changed files or extract the full ZIP into your FreeLanzo repository, commit and push to GitHub Pages. Use **Ctrl+Shift+R** to force-refresh cached CSS/JS. Verify English/Hindi/Marathi × light/dark on your live site.
