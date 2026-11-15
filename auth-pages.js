@@ -1,23 +1,44 @@
 
 import {
-  GoogleAuthProvider, browserLocalPersistence, browserSessionPersistence,
-  createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, onAuthStateChanged,
-  sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword,
-  signInWithPopup, signOut, updateProfile
+  GoogleAuthProvider,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  deleteUser,
+  getAdditionalUserInfo,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+
 import {
-  doc, getDoc, serverTimestamp, setDoc
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+
 import { auth, db } from "./firebase.js";
 
 const page = document.body.dataset.page;
 const messageBox = document.getElementById("form-message");
 const TERMS_VERSION = "2026-11-14";
+
 const accountRoles = new Set(["freelancer", "client"]);
+
 let busy = false;
+
+// =======================================
+// MESSAGE HANDLING
+// =======================================
 
 function displayMessage(message, kind = "error") {
   if (!messageBox) return;
+
   messageBox.textContent = message;
   messageBox.className = `form-message ${kind}`;
   messageBox.hidden = false;
@@ -29,11 +50,14 @@ function clearMessage() {
 
 function showLoading(button, loading) {
   if (!button) return;
+
   if (!button.dataset.defaultHtml) {
     button.dataset.defaultHtml = button.innerHTML;
   }
+
   button.disabled = loading;
   button.setAttribute("aria-busy", String(loading));
+
   button.innerHTML = loading
     ? (button.dataset.loadingText || "Working…")
     : button.dataset.defaultHtml;
@@ -41,9 +65,11 @@ function showLoading(button, loading) {
 
 async function runAction(button, action) {
   if (busy) return;
+
   busy = true;
   clearMessage();
   showLoading(button, true);
+
   try {
     await action();
   } catch (error) {
@@ -54,26 +80,61 @@ async function runAction(button, action) {
   }
 }
 
+// =======================================
+// FIREBASE ERROR HANDLING
+// =======================================
+
 function humanError(error) {
   if (error?.userMessage) return error.userMessage;
 
   const messages = {
-    "auth/invalid-email": "Enter a valid email address.",
-    "auth/invalid-credential": "We couldn’t log you in. Check your email and password, or try Google sign-in.",
-    "auth/wrong-password": "We couldn’t log you in. Check your email and password.",
-    "auth/user-not-found": "We couldn’t log you in. Check your email and password.",
-    "auth/email-already-in-use": "This email already has an account. Use the Log in page instead.",
-    "auth/account-exists-with-different-credential": "An account already uses this email with another sign-in method. Log in using that method.",
-    "auth/weak-password": "Please choose a stronger password.",
-    "auth/operation-not-allowed": "This sign-in method is disabled. Enable it in Firebase Console → Authentication → Sign-in method.",
-    "auth/unauthorized-domain": "This website domain is not authorized in Firebase. Add it in Authentication → Settings → Authorized domains.",
-    "auth/popup-blocked": "Your browser blocked Google's sign-in window. Allow pop-ups for this site and try again.",
-    "auth/popup-closed-by-user": "Google sign-in was cancelled. You can try again.",
-    "auth/cancelled-popup-request": "Another sign-in window was opened. Please try again.",
-    "auth/network-request-failed": "Network issue. Check your internet connection and try again.",
-    "auth/too-many-requests": "Too many attempts. Please try again later or reset your password.",
-    "permission-denied": "Firebase Firestore access was denied. Publish the supplied firestore.rules in Firebase Console before testing.",
-    "unavailable": "Firebase is unavailable right now. Please try again."
+    "auth/invalid-email":
+      "Enter a valid email address.",
+
+    "auth/invalid-credential":
+      "We couldn’t log you in. Check your email and password, or try Google sign-in.",
+
+    "auth/wrong-password":
+      "We couldn’t log you in. Check your email and password.",
+
+    "auth/user-not-found":
+      "We couldn’t log you in. Check your email and password.",
+
+    "auth/email-already-in-use":
+      "This email already has an account. Use the Log in page instead.",
+
+    "auth/account-exists-with-different-credential":
+      "An account already uses this email with another sign-in method. Log in using that method.",
+
+    "auth/weak-password":
+      "Please choose a stronger password.",
+
+    "auth/operation-not-allowed":
+      "This sign-in method is disabled. Enable it in Firebase Console → Authentication → Sign-in method.",
+
+    "auth/unauthorized-domain":
+      "This website domain is not authorized in Firebase. Add it in Authentication → Settings → Authorized domains.",
+
+    "auth/popup-blocked":
+      "Your browser blocked Google's sign-in window. Allow pop-ups for this site and try again.",
+
+    "auth/popup-closed-by-user":
+      "Google sign-in was cancelled. You can try again.",
+
+    "auth/cancelled-popup-request":
+      "Another sign-in window was opened. Please try again.",
+
+    "auth/network-request-failed":
+      "Network issue. Check your internet connection and try again.",
+
+    "auth/too-many-requests":
+      "Too many attempts. Please try again later or reset your password.",
+
+    "permission-denied":
+      "Firebase Firestore access was denied. Publish the supplied firestore.rules in Firebase Console before testing.",
+
+    "unavailable":
+      "Firebase is unavailable right now. Please try again."
   };
 
   return messages[error?.code] ||
@@ -86,6 +147,10 @@ function clientError(message) {
   return error;
 }
 
+// =======================================
+// SIGNUP ROLE SELECTION ONLY
+// =======================================
+
 function selectedRole() {
   const input = document.querySelector(
     'input[name="accountType"]:checked'
@@ -95,17 +160,23 @@ function selectedRole() {
     document.querySelector(
       '.role-fieldset input[type="radio"]'
     )?.focus();
-    throw clientError("Choose Freelancer or Client to continue.");
+
+    throw clientError(
+      "Choose Freelancer or Client to continue."
+    );
   }
 
   return input.value;
 }
 
 function acceptedTerms() {
-  const checkbox = document.querySelector('input[name="terms"]');
+  const checkbox = document.querySelector(
+    'input[name="terms"]'
+  );
 
   if (checkbox && !checkbox.checked) {
     checkbox.focus();
+
     throw clientError(
       "Please agree to the Terms & Conditions and Privacy Notice to continue."
     );
@@ -117,6 +188,7 @@ function formValid(form) {
     form.reportValidity();
     return false;
   }
+
   return true;
 }
 
@@ -124,7 +196,10 @@ function cleanEmail(value) {
   return value.trim().toLowerCase();
 }
 
-// Preserve category selection through login/signup.
+// =======================================
+// CATEGORY PRESERVATION
+// =======================================
+
 const CATEGORY_OPTIONS = new Set([
   "Web Development",
   "Graphic Design",
@@ -158,23 +233,38 @@ if (validRequestedCategory) {
 
   if (switchLink) {
     const target = new URL(switchLink.href);
-    target.searchParams.set("category", validRequestedCategory);
+
+    target.searchParams.set(
+      "category",
+      validRequestedCategory
+    );
+
     switchLink.href = target.href;
   }
 }
 
 function redirectToDashboard() {
-  const target = new URL("dashboard.html", location.href);
+  const target = new URL(
+    "dashboard.html",
+    location.href
+  );
 
   if (validRequestedCategory) {
     target.searchParams.set("view", "explore");
-    target.searchParams.set("category", validRequestedCategory);
+
+    target.searchParams.set(
+      "category",
+      validRequestedCategory
+    );
   }
 
   window.location.assign(target.href);
 }
 
-// Create user profile in Firestore.
+// =======================================
+// FIRESTORE ACCOUNT PROFILE
+// =======================================
+
 async function createAccountDocument(
   user,
   role,
@@ -182,6 +272,7 @@ async function createAccountDocument(
   provider = "password"
 ) {
   const ref = doc(db, "users", user.uid);
+
   const prior = await getDoc(ref);
 
   if (prior.exists()) {
@@ -194,11 +285,13 @@ async function createAccountDocument(
   const profile = {
     uid: user.uid,
     email: user.email || "",
+
     displayName: (
       preferredName ||
       user.displayName ||
       "Member"
     ).trim().slice(0, 80),
+
     role,
     provider,
     photoURL: user.photoURL || "",
@@ -220,13 +313,17 @@ async function readAccountDocument(user) {
     doc(db, "users", user.uid)
   );
 
-  return snapshot.exists() ? snapshot.data() : null;
+  return snapshot.exists()
+    ? snapshot.data()
+    : null;
 }
 
-// Verify account and selected role during login.
+// =======================================
+// AUTOMATIC ROLE VERIFICATION
+// =======================================
+
 async function verifyAccountRole(
   user,
-  requestedRole,
   { discardNewGoogleLogin = false } = {}
 ) {
   let profile;
@@ -239,8 +336,10 @@ async function verifyAccountRole(
   }
 
   if (!profile) {
-    // Google login can create a Firebase Auth identity.
-    // Delete it only when this popup created it.
+
+    // Google login may create a new Firebase identity.
+    // Delete only if this specific popup created it.
+
     if (discardNewGoogleLogin) {
       try {
         await deleteUser(user);
@@ -249,6 +348,7 @@ async function verifyAccountRole(
           "Could not remove an unregistered Google login; signing out instead.",
           error
         );
+
         await signOut(auth);
       }
     } else {
@@ -260,24 +360,24 @@ async function verifyAccountRole(
     );
   }
 
-  if (profile.role !== requestedRole) {
+  // Role comes from Firestore, not the Login form.
+
+  if (!accountRoles.has(profile.role)) {
     await signOut(auth);
 
     throw clientError(
-      `This account is registered as ${
-        profile.role === "client"
-          ? "Client"
-          : "Freelancer"
-      }. Select the correct account type and try again.`
+      "Your saved FreeLanzo account role is invalid. Contact the project team."
     );
   }
 
   redirectToDashboard();
 }
 
-// EMAIL LOGIN
+// =======================================
+// EMAIL LOGIN — NO ROLE BUTTONS
+// =======================================
+
 async function loginWithEmail(form) {
-  const role = selectedRole();
   acceptedTerms();
 
   if (!formValid(form)) return;
@@ -305,12 +405,14 @@ async function loginWithEmail(form) {
     password
   );
 
-  await verifyAccountRole(credentials.user, role);
+  await verifyAccountRole(credentials.user);
 }
 
-// GOOGLE LOGIN
+// =======================================
+// GOOGLE LOGIN — NO ROLE BUTTONS
+// =======================================
+
 async function loginWithGoogle() {
-  const role = selectedRole();
   acceptedTerms();
 
   await setPersistence(
@@ -326,19 +428,26 @@ async function loginWithGoogle() {
     prompt: "select_account"
   });
 
-  const credentials = await signInWithPopup(auth, provider);
+  const credentials = await signInWithPopup(
+    auth,
+    provider
+  );
 
   const isNewAuthUser =
     getAdditionalUserInfo(credentials)?.isNewUser === true;
 
-  await verifyAccountRole(credentials.user, role, {
+  await verifyAccountRole(credentials.user, {
     discardNewGoogleLogin: isNewAuthUser
   });
 }
 
-// EMAIL SIGNUP
+// =======================================
+// EMAIL SIGNUP — ROLE REQUIRED
+// =======================================
+
 async function signupWithEmail(form) {
   const role = selectedRole();
+
   acceptedTerms();
 
   if (!formValid(form)) return;
@@ -369,16 +478,22 @@ async function signupWithEmail(form) {
   }
 
   if (password !== confirmation) {
-    throw clientError("The two passwords don't match.");
+    throw clientError(
+      "The two passwords don't match."
+    );
   }
 
-  await setPersistence(auth, browserLocalPersistence);
-
-  const credentials = await createUserWithEmailAndPassword(
+  await setPersistence(
     auth,
-    email,
-    password
+    browserLocalPersistence
   );
+
+  const credentials =
+    await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
 
   let saved = false;
 
@@ -410,6 +525,7 @@ async function signupWithEmail(form) {
     }
 
     redirectToDashboard();
+
   } catch (error) {
     if (!saved) {
       try {
@@ -423,12 +539,19 @@ async function signupWithEmail(form) {
   }
 }
 
-// GOOGLE SIGNUP — FIXED
+// =======================================
+// GOOGLE SIGNUP — ROLE REQUIRED
+// =======================================
+
 async function signupWithGoogle() {
   const role = selectedRole();
+
   acceptedTerms();
 
-  await setPersistence(auth, browserLocalPersistence);
+  await setPersistence(
+    auth,
+    browserLocalPersistence
+  );
 
   const provider = new GoogleAuthProvider();
 
@@ -436,7 +559,10 @@ async function signupWithGoogle() {
     prompt: "select_account"
   });
 
-  const credentials = await signInWithPopup(auth, provider);
+  const credentials = await signInWithPopup(
+    auth,
+    provider
+  );
 
   try {
     const result = await createAccountDocument(
@@ -446,8 +572,9 @@ async function signupWithGoogle() {
       "google.com"
     );
 
-    // Reject existing FreeLanzo accounts,
-    // even when their registered role matches.
+    // Reject existing registered accounts,
+    // even when the role matches.
+
     if (result.exists) {
       throw clientError(
         `This Google account is already registered as ${
@@ -458,12 +585,9 @@ async function signupWithGoogle() {
       );
     }
 
-    // Only newly registered profiles proceed.
     redirectToDashboard();
 
   } catch (error) {
-    // Sign out when signup fails.
-    // Existing Firestore profiles are never deleted.
     if (auth.currentUser) {
       await signOut(auth);
     }
@@ -472,7 +596,10 @@ async function signupWithGoogle() {
   }
 }
 
-// PASSWORD RESET
+// =======================================
+// RESET PASSWORD
+// =======================================
+
 async function resetPassword(form) {
   if (!formValid(form)) return;
 
@@ -490,8 +617,14 @@ async function resetPassword(form) {
   form.reset();
 }
 
-// Password visibility toggles.
-document.querySelectorAll(".toggle-password").forEach(button => {
+// =======================================
+// SHOW / HIDE PASSWORD
+// =======================================
+
+document.querySelectorAll(
+  ".toggle-password"
+).forEach(button => {
+
   button.addEventListener("click", () => {
     const input = document.getElementById(
       button.dataset.passwordTarget
@@ -499,9 +632,14 @@ document.querySelectorAll(".toggle-password").forEach(button => {
 
     const shown = input.type !== "password";
 
-    input.type = shown ? "password" : "text";
+    input.type = shown
+      ? "password"
+      : "text";
 
-    button.setAttribute("aria-pressed", String(!shown));
+    button.setAttribute(
+      "aria-pressed",
+      String(!shown)
+    );
 
     button.setAttribute(
       "aria-label",
@@ -512,17 +650,27 @@ document.querySelectorAll(".toggle-password").forEach(button => {
       }`
     );
 
-    button.querySelector(".toggle-label").textContent =
-      shown ? "Show" : "Hide";
+    button.querySelector(
+      ".toggle-label"
+    ).textContent = shown
+      ? "Show"
+      : "Hide";
   });
 });
 
-// Form submission.
-document.querySelectorAll("form[data-action]").forEach(form => {
+// =======================================
+// FORM SUBMISSION
+// =======================================
+
+document.querySelectorAll(
+  "form[data-action]"
+).forEach(form => {
+
   form.addEventListener("submit", event => {
     event.preventDefault();
 
-    const submit = form.querySelector('[type="submit"]');
+    const submit =
+      form.querySelector('[type="submit"]');
 
     runAction(
       submit,
@@ -535,10 +683,14 @@ document.querySelectorAll("form[data-action]").forEach(form => {
   });
 });
 
-// Google button events.
+// =======================================
+// GOOGLE AUTHENTICATION BUTTONS
+// =======================================
+
 document.querySelectorAll(
   'button[data-action^="google-"]'
 ).forEach(button => {
+
   button.addEventListener("click", () => {
     runAction(
       button,
@@ -549,9 +701,14 @@ document.querySelectorAll(
   });
 });
 
-// Dashboard account verification.
+// =======================================
+// DASHBOARD ACCOUNT VERIFICATION
+// =======================================
+
 if (page === "dashboard") {
+
   onAuthStateChanged(auth, async user => {
+
     if (!user) {
       window.location.replace("login.html");
       return;
@@ -567,22 +724,30 @@ if (page === "dashboard") {
         return;
       }
 
-      document.getElementById("account-name").textContent =
+      document.getElementById(
+        "account-name"
+      ).textContent =
         profile.displayName ||
         user.displayName ||
         "FreeLanzo member";
 
-      document.getElementById("account-email").textContent =
+      document.getElementById(
+        "account-email"
+      ).textContent =
         user.email ||
         profile.email ||
         "";
 
-      document.getElementById("account-role").textContent =
+      document.getElementById(
+        "account-role"
+      ).textContent =
         profile.role === "client"
           ? "Client account"
           : "Freelancer account";
 
-      document.getElementById("account-avatar").textContent =
+      document.getElementById(
+        "account-avatar"
+      ).textContent =
         (profile.displayName || "FL")
           .trim()
           .split(/\s+/)
@@ -595,11 +760,13 @@ if (page === "dashboard") {
     }
   });
 
-  document.getElementById("sign-out")
-    .addEventListener("click", event => {
-      runAction(event.currentTarget, async () => {
-        await signOut(auth);
-        window.location.replace("login.html");
-      });
+  document.getElementById(
+    "sign-out"
+  ).addEventListener("click", event => {
+
+    runAction(event.currentTarget, async () => {
+      await signOut(auth);
+      window.location.replace("login.html");
     });
+  });
 }
