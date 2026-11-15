@@ -1,43 +1,249 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f5f5f2" />
-  <meta name="description" content="Log in to FreeLanzo as a freelancer or client." />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="theme-color" content="#f5f5f2"/>
+  <meta name="description" content="Log in to your FreeLanzo account. Freelancer or Client is detected automatically."/>
+
   <title>Log in — FreeLanzo</title>
-  <link rel="icon" type="svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="auth.css" />
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="stylesheet" href="auth.css"/>
+  <link rel="stylesheet" href="preferences.css"/>
+
   <script type="module" src="auth-pages.js"></script>
+  <script type="module" src="ui-preferences.js"></script>
 </head>
+
 <body class="subpage" data-page="login">
+
   <a class="skip-link" href="#main">Skip to content</a>
+
   <header class="auth-topbar">
     <div class="container auth-topbar-inner">
-      <a href="index.html" class="brand" aria-label="FreeLanzo home"><img src="freelanzo-logo.svg" width="44" height="44" alt=""/><span class="brand-wordmark">FreeLanzo</span></a>
-      <a href="index.html" class="back-link"><span aria-hidden="true">←</span> Back to home</a>
+      <a class="brand" href="index.html" aria-label="FreeLanzo home">
+        <img src="freelanzo-logo.svg" alt="" width="44" height="44"/>
+        <span class="brand-wordmark">FreeLanzo</span>
+      </a>
+
+      <a class="back-link" href="index.html">
+        <span aria-hidden="true">←</span> Back to home
+      </a>
     </div>
   </header>
-  <main id="main" class="auth-layout"><section class="auth-panel" aria-labelledby="auth-heading"><div class="auth-panel-inner"><div class="auth-kicker"><span class="red-block"></span> YOUR WORK STARTS HERE</div><h1 id="auth-heading">Welcome back<span class="accent-dot">.</span></h1><p class="auth-subtitle">Pick your account type, then sign in to continue.</p><form class="auth-form" id="login-form" data-action="email-login" novalidate>
-  <fieldset class="role-fieldset" id="role-fieldset">
-      <legend>Account type <span class="field-required">*</span></legend>
-      <p class="field-hint">Select the account type you registered with.</p>
-      <div class="role-choice">
-        <label class="role-card"><input type="radio" name="accountType" value="freelancer" required/><span class="role-card-icon" aria-hidden="true">F</span><span><strong>Freelancer</strong><small>Showcase your skills</small></span><span class="role-card-check" aria-hidden="true">✓</span></label>
-        <label class="role-card"><input type="radio" name="accountType" value="client" required/><span class="role-card-icon" aria-hidden="true">↗</span><span><strong>Client</strong><small>Discover great talent</small></span><span class="role-card-check" aria-hidden="true">✓</span></label>
+
+  <main class="auth-layout" id="main">
+    <section class="auth-panel" aria-labelledby="auth-heading">
+      <div class="auth-panel-inner">
+
+        <div class="auth-kicker">
+          <span class="red-block"></span>
+          YOUR WORK STARTS HERE
+        </div>
+
+        <h1 id="auth-heading">
+          Welcome back<span class="accent-dot">.</span>
+        </h1>
+
+        <p class="auth-subtitle">
+          Sign in with your email or Google.
+          Your account type is detected automatically.
+        </p>
+
+        <form
+          class="auth-form"
+          id="login-form"
+          data-action="email-login"
+          novalidate
+        >
+
+          <div class="form-field">
+            <label for="login-email">
+              Email address <span class="field-required">*</span>
+            </label>
+
+            <input
+              type="email"
+              id="login-email"
+              name="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              maxlength="254"
+              required
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="login-password">
+              Password <span class="field-required">*</span>
+            </label>
+
+            <div class="password-wrap">
+              <input
+                type="password"
+                id="login-password"
+                name="login-password"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+                required
+              />
+
+              <button
+                type="button"
+                class="toggle-password"
+                data-password-target="login-password"
+                aria-label="Show password"
+                aria-pressed="false"
+              >
+                <span class="eye-icon" aria-hidden="true">◉</span>
+                <span class="toggle-label">Show</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-between">
+            <label class="check-line">
+              <input
+                type="checkbox"
+                name="remember"
+                id="remember-me"
+              />
+              <span>Remember me</span>
+            </label>
+
+            <a class="text-link-small" href="reset-password.html">
+              Forgot password?
+            </a>
+          </div>
+
+          <p class="field-hint remember-hint">
+            Remember me keeps you signed in after closing the browser.
+            Without it, the session ends when the tab or window closes.
+          </p>
+
+          <label class="check-line terms-line">
+            <input
+              type="checkbox"
+              id="login-terms"
+              name="terms"
+              required
+            />
+
+            <span>
+              I agree to the
+              <a href="terms.html" target="_blank" rel="noopener noreferrer">
+                Terms &amp; Conditions
+              </a>
+              and
+              <a href="privacy.html" target="_blank" rel="noopener noreferrer">
+                Privacy Notice
+              </a>.
+            </span>
+          </label>
+
+          <div
+            id="form-message"
+            class="form-message"
+            role="status"
+            aria-live="polite"
+            hidden
+          ></div>
+
+          <button
+            type="submit"
+            class="btn btn-primary auth-primary"
+            data-loading-text="Logging in…"
+          >
+            Log in <span aria-hidden="true">→</span>
+          </button>
+
+        </form>
+
+        <div class="social-separator">
+          <span>or</span>
+        </div>
+
+        <button
+          type="button"
+          class="google-button"
+          id="google-login"
+          data-action="google-login"
+        >
+          <span class="google-mark" aria-hidden="true">G</span>
+          Continue with Google
+        </button>
+
+        <p class="switch-copy">
+          New to FreeLanzo?
+          <a href="signup.html">Create an account →</a>
+        </p>
+
       </div>
-    </fieldset>
-  <div class="form-field"><label for="login-email">Email address <span class="field-required">*</span></label><input id="login-email" name="email" type="email" placeholder="you@example.com" autocomplete="email" maxlength="254" required/></div>
-  <div class="form-field"><label for="login-password">Password <span class="field-required">*</span></label><div class="password-wrap"><input type="password" id="login-password" name="login-password" placeholder="Enter your password" autocomplete="current-password"  required/><button type="button" class="toggle-password" data-password-target="login-password" aria-label="Show password" aria-pressed="false"><span class="eye-icon" aria-hidden="true">◉</span> <span class="toggle-label">Show</span></button></div></div>
-  <div class="form-between"><label class="check-line"><input type="checkbox" name="remember" id="remember-me"/><span>Remember me</span></label><a class="text-link-small" href="reset-password.html">Forgot password?</a></div>
-  <p class="field-hint remember-hint">Remember me keeps you signed in after closing the browser. Without it, the session ends when the tab or window closes.</p>
-  <label class="check-line terms-line"><input id="login-terms" name="terms" type="checkbox" required/><span>I agree to the <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a> and <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Notice</a>.</span></label>
-  <div id="form-message" class="form-message" role="status" aria-live="polite" hidden></div>
-  <button class="btn btn-primary auth-primary" type="submit" data-loading-text="Logging in…">Log in <span aria-hidden="true">→</span></button>
-</form>
-<div class="social-separator"><span>or</span></div><button class="google-button" id="google-login" type="button" data-action="google-login"><span class="google-mark" aria-hidden="true">G</span> Continue with Google</button><p class="switch-copy">New to FreeLanzo? <a href="signup.html">Create an account →</a></p></div></section>
-    <aside class="auth-art" aria-label="FreeLanzo creative work illustration"><div class="auth-art-grid" aria-hidden="true"></div><div class="art-top-note">FREELANZO / MADE FOR MAKERS</div><div class="art-stage"><div class="art-slab slab-one"></div><div class="art-slab slab-two"></div><div class="art-portfolio"><div class="art-portfolio-top"><span>MY SPACE</span><span>↗</span></div><div class="art-portfolio-mark"><img src="freelanzo-monogram.svg" width="180" height="116" alt=""/></div><div class="art-portfolio-bottom"><span>IDEAS TO IMPACT.</span><span>001 / 015</span></div></div><span class="art-sticker art-sticker-top">01&nbsp; CREATE</span><span class="art-sticker art-sticker-bottom">◉&nbsp; CONNECT</span></div><div class="art-bottom-copy"><strong>GOOD WORK IS BETTER TOGETHER.</strong><p>One place to showcase, discover, and connect.</p></div></aside></main>
-  <footer class="auth-footer"><span>© 2026 FreeLanzo</span><span><a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></span></footer>
+    </section>
+
+    <aside
+      class="auth-art"
+      aria-label="FreeLanzo creative work illustration"
+    >
+      <div class="auth-art-grid" aria-hidden="true"></div>
+
+      <div class="art-top-note">
+        FREELANZO / MADE FOR MAKERS
+      </div>
+
+      <div class="art-stage">
+        <div class="art-slab slab-one"></div>
+        <div class="art-slab slab-two"></div>
+
+        <div class="art-portfolio">
+          <div class="art-portfolio-top">
+            <span>MY SPACE</span>
+            <span>↗</span>
+          </div>
+
+          <div class="art-portfolio-mark">
+            <img
+              src="freelanzo-monogram.svg"
+              alt=""
+              width="180"
+              height="116"
+            />
+          </div>
+
+          <div class="art-portfolio-bottom">
+            <span>IDEAS TO IMPACT.</span>
+            <span>001 / 015</span>
+          </div>
+        </div>
+
+        <span class="art-sticker art-sticker-top">
+          01 CREATE
+        </span>
+
+        <span class="art-sticker art-sticker-bottom">
+          ◉ CONNECT
+        </span>
+      </div>
+
+      <div class="art-bottom-copy">
+        <strong>GOOD WORK IS BETTER TOGETHER.</strong>
+        <p>One place to showcase, discover, and connect.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="auth-footer">
+    <span>© 2026 FreeLanzo</span>
+
+    <span>
+      <a href="terms.html">Terms</a>
+      ·
+      <a href="privacy.html">Privacy</a>
+    </span>
+  </footer>
+
 </body>
 </html>
