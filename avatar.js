@@ -2,7 +2,7 @@ import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET } from "./cloudinary-co
 
 // 100-200 decimal KB for selected file AND processed upload blob, browser side.
 // This does not provide a server-side Cloudinary upload restriction.
-export const AVATAR_MIN_BYTES = 100000;
+export const AVATAR_MIN_BYTES = 10000;
 export const AVATAR_MAX_BYTES = 200000;
 export const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
