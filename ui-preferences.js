@@ -889,9 +889,13 @@ const UI_TEXT = {
     "hi": "JPG, PNG या WebP · मूल और अपलोड फ़ोटो 100–200 KB · बीच से वर्गाकार क्रॉप",
     "mr": "JPG, PNG किंवा WebP · मूळ व अपलोड फोटो 100–200 KB · मध्यभागी चौरस क्रॉप"
   },
-  "Your details are private unless you publish your freelancer listing from Settings.": {
-    "hi": "सेटिंग्स से प्रकाशित करने तक आपकी जानकारी निजी रहती है।",
-    "mr": "सेटिंग्जमधून प्रकाशित करेपर्यंत तुमची माहिती खासगी राहते."
+  "Freelancers will appear here once they publish their profiles from Dashboard Home.": {
+    "hi": "फ्रीलांसर डैशबोर्ड होम से अपनी प्रोफ़ाइल प्रकाशित करेंगे तो यहाँ दिखेंगे।",
+    "mr": "फ्रीलान्सर डॅशबोर्ड मुख्यपृष्ठावरून प्रोफाइल प्रकाशित करतील तेव्हा येथे दिसतील."
+  },
+  "Your details are private unless you publish your freelancer listing from Dashboard Home.": {
+    "hi": "डैशबोर्ड होम से प्रोफ़ाइल प्रकाशित करने तक आपकी जानकारी निजी रहती है।",
+    "mr": "डॅशबोर्ड मुख्यपृष्ठावरून प्रोफाइल प्रकाशित करेपर्यंत तुमची माहिती खासगी राहते."
   },
   "Client profiles are not listed in Explore Freelancers. Your account type and registered email are not public directory fields.": {
     "hi": "क्लाइंट प्रोफ़ाइल खोज सूची में नहीं आतीं। खाता प्रकार और ईमेल सार्वजनिक नहीं होते।",

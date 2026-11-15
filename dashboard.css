@@ -178,3 +178,9 @@
 .avatar-crop-actions .btn{min-height:42px}
 .avatar-crop-error{color:#c53030;font-size:13px}
 @media(max-width:520px){.avatar-crop-dialog{padding:16px}.avatar-crop-heading h2{font-size:23px}}
+
+/* Phase 3.6: visibility control moved from Settings to Freelancer Dashboard Home. */
+.home-visibility-panel{margin:0 0 34px}
+.home-visibility-panel h2{margin:10px 0 15px}
+.home-visibility-panel .settings-toggle{margin:20px 0}
+.home-visibility-panel .btn{max-width:100%}

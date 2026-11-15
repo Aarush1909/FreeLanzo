@@ -360,7 +360,7 @@ function renderFreelancers() {
   const wrap = $("#freelancer-results"); if (!wrap) return;
   wrap.replaceChildren();
   if (!matches.length) {
-    wrap.append(emptyState(state.freelancers.length ? "No matches found" : "No published freelancers yet", state.freelancers.length ? "Try another skill or remove the category filter." : "Freelancers will appear here once they publish their profiles from Settings."));
+    wrap.append(emptyState(state.freelancers.length ? "No matches found" : "No published freelancers yet", state.freelancers.length ? "Try another skill or remove the category filter." : "Freelancers will appear here once they publish their profiles from Dashboard Home."));
     return;
   }
   for (const freelancer of matches) {
@@ -428,7 +428,7 @@ async function onChoosePhoto(event) {
   clearPhotoSelection();
   if (!file) return;
   try {
-    if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) throw new Error("Choose a photo between 10 KB and 200 KB.");
+    if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) throw new Error("Choose a photo between 100 KB and 200 KB.");
     $("#photo-status").textContent = "Adjust your crop, then confirm to prepare the photo.";
     const crop = await selectAvatarCrop(file);
     if (!crop) {
