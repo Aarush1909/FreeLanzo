@@ -69,11 +69,11 @@ service cloud.firestore {
       allow create: if isOwner(uid) &&
         request.resource.data.keys().hasOnly([
           'uid', 'email', 'displayName', 'role', 'provider', 'photoURL',
-          'createdAt', 'termsAcceptedAt', 'termsVersion'
+          'createdAt', 'termsAcceptedAt', 'termsVersion', 'verificationRequired'
         ]) &&
         request.resource.data.keys().hasAll([
           'uid', 'email', 'displayName', 'role', 'provider', 'photoURL',
-          'createdAt', 'termsAcceptedAt', 'termsVersion'
+          'createdAt', 'termsAcceptedAt', 'termsVersion', 'verificationRequired'
         ]) &&
         request.resource.data.uid == uid &&
         request.resource.data.email == request.auth.token.email &&
@@ -85,7 +85,8 @@ service cloud.firestore {
         request.resource.data.photoURL is string &&
         request.resource.data.createdAt is timestamp &&
         request.resource.data.termsAcceptedAt is timestamp &&
-        request.resource.data.termsVersion == '2026-11-14';
+        request.resource.data.termsVersion == '2026-11-14' &&
+        request.resource.data.get('verificationRequired', false) == (request.resource.data.provider == 'password');
       // Only profile fields, including the opted-in custom photo, may be changed.
       allow update: if isOwner(uid) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -109,6 +110,19 @@ service cloud.firestore {
           request.resource.data.createdAt is timestamp &&
           exists(/databases/$(database)/documents/publicFreelancers/$(freelancerUid)) &&
           get(/databases/$(database)/documents/publicFreelancers/$(freelancerUid)).data.published == true;
+        allow update: if false;
+        allow delete: if isOwner(uid);
+      }
+
+      // User-owned block list: cannot forge other users' block records.
+      match /blocked/{otherUid} {
+        allow get: if isOwner(uid);
+        allow list: if isOwner(uid) && request.query.limit <= 100;
+        allow create: if isOwner(uid) && otherUid != uid &&
+          request.resource.data.keys().hasOnly(['blockedUid', 'createdAt']) &&
+          request.resource.data.keys().hasAll(['blockedUid', 'createdAt']) &&
+          request.resource.data.blockedUid == otherUid &&
+          request.resource.data.createdAt == request.time;
         allow update: if false;
         allow delete: if isOwner(uid);
       }
@@ -163,6 +177,46 @@ service cloud.firestore {
     function isConversationMember(cid) {
       return signedIn() && request.auth.uid in conversation(cid).memberUids;
     }
+    function verifiedForChat(uid) {
+      // Existing accounts without this flag continue to work. Newly created
+      // email/password accounts must verify their email before chat/contract writes.
+      return get(/databases/$(database)/documents/users/$(uid)).data.get('verificationRequired', false) == false ||
+        request.auth.token.get('email_verified', false) == true;
+    }
+    function blockedPair(clientUid, freelancerUid) {
+      return exists(/databases/$(database)/documents/users/$(clientUid)/blocked/$(freelancerUid)) ||
+        exists(/databases/$(database)/documents/users/$(freelancerUid)/blocked/$(clientUid));
+    }
+    function canInteract(cid) {
+      return isConversationMember(cid) &&
+        conversation(cid).get('clientActive', true) == true &&
+        conversation(cid).get('freelancerActive', true) == true &&
+        verifiedForChat(request.auth.uid) &&
+        !blockedPair(conversation(cid).clientUid, conversation(cid).freelancerUid);
+    }
+    function validCloseConversation(cid) {
+      // Members may only close their OWN side, irreversibly. Keep shared
+      // messages/offers for the remaining participant; remove inbox display name.
+      return isConversationMember(cid) &&
+        request.resource.data.lastMessage == 'Conversation closed — account deleted' &&
+        (
+          (request.auth.uid == resource.data.clientUid &&
+            resource.data.get('clientActive', true) == true &&
+            request.resource.data.clientActive == false &&
+            request.resource.data.clientName == 'Deleted account' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'clientActive', 'clientName', 'lastMessage'
+            ])) ||
+          (request.auth.uid == resource.data.freelancerUid &&
+            resource.data.get('freelancerActive', true) == true &&
+            request.resource.data.freelancerActive == false &&
+            request.resource.data.freelancerName == 'Deleted account' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'freelancerActive', 'freelancerName', 'lastMessage'
+            ]))
+        );
+    }
+
     function validUnreadNumbers(data) {
       return data.get('clientUnread', 0) is int &&
         data.get('freelancerUnread', 0) is int &&
@@ -175,18 +229,20 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
         'clientUid', 'freelancerUid', 'memberUids', 'clientName', 'freelancerName',
         'createdAt', 'updatedAt', 'lastMessage', 'lastMessageId', 'lastSenderUid',
-        'clientUnread', 'freelancerUnread'
+        'clientUnread', 'freelancerUnread', 'clientActive', 'freelancerActive'
       ]) &&
       request.resource.data.keys().hasAll([
         'clientUid', 'freelancerUid', 'memberUids', 'clientName', 'freelancerName',
         'createdAt', 'updatedAt', 'lastMessage', 'lastMessageId', 'lastSenderUid',
-        'clientUnread', 'freelancerUnread'
+        'clientUnread', 'freelancerUnread', 'clientActive', 'freelancerActive'
       ]) &&
       request.resource.data.clientUid == request.auth.uid &&
       request.resource.data.clientUid != request.resource.data.freelancerUid &&
       cid == request.resource.data.clientUid + '_' + request.resource.data.freelancerUid &&
       request.resource.data.memberUids == [request.resource.data.clientUid, request.resource.data.freelancerUid] &&
       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'client' &&
+      exists(/databases/$(database)/documents/users/$(request.resource.data.freelancerUid)) &&
+      get(/databases/$(database)/documents/users/$(request.resource.data.freelancerUid)).data.role == 'freelancer' &&
       exists(/databases/$(database)/documents/publicFreelancers/$(request.resource.data.freelancerUid)) &&
       get(/databases/$(database)/documents/publicFreelancers/$(request.resource.data.freelancerUid)).data.published == true &&
       request.resource.data.clientName is string &&
@@ -199,7 +255,11 @@ service cloud.firestore {
       request.resource.data.lastMessageId == '' &&
       request.resource.data.lastSenderUid == '' &&
       request.resource.data.clientUnread == 0 &&
-      request.resource.data.freelancerUnread == 0;
+      request.resource.data.freelancerUnread == 0 &&
+      request.resource.data.clientActive == true &&
+      request.resource.data.freelancerActive == true &&
+      verifiedForChat(request.auth.uid) &&
+      !blockedPair(request.resource.data.clientUid, request.resource.data.freelancerUid);
     }
     function validReadReceipt(cid) {
       return isConversationMember(cid) && validUnreadNumbers(request.resource.data) &&
@@ -213,7 +273,7 @@ service cloud.firestore {
         );
     }
     function validSendPreview(cid) {
-      return isConversationMember(cid) &&
+      return canInteract(cid) &&
         validUnreadNumbers(request.resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'lastMessage', 'lastMessageId', 'lastSenderUid', 'updatedAt',
@@ -313,27 +373,29 @@ service cloud.firestore {
       request.resource.data.respondedAt == null;
     }
 
+    // No /reports rule: the default-deny catchall below rejects all report reads and writes.
+
     match /conversations/{cid} {
       // The client is allowed to check for a missing deterministic conversation.
       allow get: if signedIn() && (resource == null || request.auth.uid in resource.data.memberUids);
       allow list: if signedIn() && request.query.limit <= 70 && request.auth.uid in resource.data.memberUids;
       allow create: if signedIn() && validConversationIdentity(cid);
-      allow update: if validReadReceipt(cid) || validSendPreview(cid);
+      allow update: if validReadReceipt(cid) || validSendPreview(cid) || validCloseConversation(cid);
       allow delete: if false;
 
       match /messages/{messageId} {
         allow get: if isConversationMember(cid);
         allow list: if isConversationMember(cid) && request.query.limit <= 120;
-        allow create: if isConversationMember(cid) && validChatMessage(cid, messageId);
+        allow create: if canInteract(cid) && validChatMessage(cid, messageId);
         allow update, delete: if false;
       }
       match /contracts/{contractId} {
         allow get: if isConversationMember(cid);
         allow list: if isConversationMember(cid) && request.query.limit <= 100;
-        allow create: if isConversationMember(cid) && validWorkOffer(cid);
+        allow create: if canInteract(cid) && validWorkOffer(cid);
         // After submission the contract's terms and signature are immutable.
         // Freelancer may accept/decline; client may cancel while pending.
-        allow update: if isConversationMember(cid) &&
+        allow update: if canInteract(cid) &&
           resource.data.status == 'pending' &&
           ((request.auth.uid == resource.data.freelancerUid &&
             request.resource.data.status in ['accepted', 'declined']) ||

@@ -288,3 +288,17 @@ Freelancers can **Accept** or **Decline** a pending offer. Both parties see the 
 - Removed legacy `storage.rules` and `storage-cors.json` from this release (not required by text-only chat).
 
 **Validation:** Local syntax, file-integrity, and interface checks cannot confirm live Firestore permissions. Publish the rules and test with disposable accounts before a demo.
+
+
+---
+## Phase 4.2 — Final candidate (18 November 2026)
+
+New: block/unblock user, private write-only reports, paginated older text messages, send/retry feedback with stable message IDs, Today/Yesterday date separators, print-friendly offers, new password-account email verification, and conversation closure/anonymized inbox names on deletion. Existing real-time chat, unread counts and immutable offers are preserved. Firebase rules now enforce blocks, closed conversations and email verification for newly registered password users.
+
+**New files:** `verify-email.html`, `js/verify-email.js`, `PHASE4_2_DEPLOY.md`, `PHASE4_2_VIVA.md`, `firebase.json`, `package.json`, `tests/firestore-rules.test.mjs`, `tests/structure-check.py`.
+
+**Historic Phase 4.2 note:** That version included a report button. Phase 4.3 removes reporting entirely. Rules and frontend must be deployed together. A browser still cannot guarantee Cloudinary cleanup or atomic account deletion.
+
+
+## Phase 4.3 — simplified moderation
+The Report button, report submission flow, and Firestore report creation permission were removed. Blocking remains available. No admin dashboard, custom claims, account bans, or moderation notifications are required. See **PHASE4_3_DEPLOY.md**. Existing report documents, if any, are not deleted automatically.
