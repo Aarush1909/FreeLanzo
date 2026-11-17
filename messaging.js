@@ -1,9 +1,9 @@
-/* FreeLanzo Phase 4: real one-to-one TEXT messages and client work offers.
+/* FreeLanzo Phase 4.1: private realtime text messages, unread counts and work offers.
  * Chat and signed work offers live in Cloud Firestore; no chat media uploads.
  * The optional small client signature image is stored in its private offer record.
  */
 import {
-  collection, doc, getDoc, limit, onSnapshot, orderBy, query,
+  collection, doc, getDoc, increment, limit, onSnapshot, orderBy, query,
   runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { db } from "./firebase.js";
@@ -12,6 +12,7 @@ const SIGNATURE_MAX = 30000; // 30 decimal KB
 const SIGNATURE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const $ = selector => document.querySelector(selector);
+const ui = text => window.FreeLanzoPreferences?.t?.(text) || text;
 const el = (tag, className = "", text = "") => {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -21,7 +22,7 @@ const el = (tag, className = "", text = "") => {
 const validUid = value => typeof value === "string" && /^[A-Za-z0-9_-]{6,128}$/.test(value);
 const formatTime = timestamp => {
   const date = timestamp?.toDate?.();
-  return date ? new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(date) : "Sending…";
+  return date ? new Intl.DateTimeFormat(({hi:"hi-IN",mr:"mr-IN"})[document.documentElement.lang] || "en-IN", { dateStyle: "short", timeStyle: "short" }).format(date) : "Sending…";
 };
 const formatMoney = (amount, currency = "INR") => {
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount); }
@@ -43,6 +44,32 @@ let active = false;
 let busy = false;
 let signatureFile = null;
 let liveOfferUrl = null;
+const markingRead = new Set();
+const actingOnOffer = new Set();
+const PAYMENT_LABELS = {
+  completion: "On project completion",
+  milestones: "In agreed milestones",
+  weekly: "Weekly payments",
+  upfront: "Before work begins"
+};
+const UNREAD_FIELDS = { client: "clientUnread", freelancer: "freelancerUnread" };
+function todayLocal() {
+  const date = new Date();
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+function myUnread(convo) {
+  const value = Number(convo?.[UNREAD_FIELDS[me?.role]] || 0);
+  return Number.isFinite(value) && value > 0 ? Math.min(9999, Math.floor(value)) : 0;
+}
+function markConversationRead(convo) {
+  if (!convo || convo.id !== activeConversation?.id || !myUnread(convo) || markingRead.has(convo.id)) return;
+  markingRead.add(convo.id);
+  updateDoc(doc(db, "conversations", convo.id), { [UNREAD_FIELDS[me.role]]: 0 })
+    .catch(error => status(`Could not mark messages read: ${textError(error)}`, true))
+    .finally(() => markingRead.delete(convo.id));
+}
+
 
 function status(message, isError = false) {
   const target = $("#chat-status");
@@ -88,18 +115,30 @@ function renderInbox() {
   const holder = $("#chat-inbox-list");
   if (!holder) return;
   holder.replaceChildren();
-  const ordered = [...conversations].sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+  const totalUnread = conversations.reduce((sum, convo) => sum + myUnread(convo), 0);
+  const totalLabel = $("#chat-unread-total");
+  if (totalLabel) totalLabel.textContent = ui(totalUnread ? `${totalUnread} unread` : "All read");
+  const ordered = [...conversations].sort((a,b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
   if (!ordered.length) {
     holder.append(el("p", "chat-inbox-empty", "No conversations yet. Clients can start a chat from Explore Freelancers."));
     return;
   }
   for (const convo of ordered) {
+    const unread = myUnread(convo);
     const btn = el("button", "chat-inbox-item");
     btn.type = "button";
     btn.classList.toggle("is-active", activeConversation?.id === convo.id);
+    btn.classList.toggle("has-unread", unread > 0);
     const name = me.role === "client" ? convo.freelancerName : convo.clientName;
-    btn.append(el("strong", "", name || "FreeLanzo member"));
-    btn.append(el("span", "", convo.lastMessage || "Start your conversation"));
+    const nameRow = el("span", "chat-inbox-name-row");
+    nameRow.append(el("strong", "", name || "FreeLanzo member"));
+    if (unread) {
+      const count = el("b", "chat-unread-badge", unread > 99 ? "99+" : String(unread));
+      count.setAttribute("aria-label", ui(`${unread} unread messages`));
+      nameRow.append(count);
+    }
+    btn.append(nameRow);
+    btn.append(el("span", "chat-inbox-preview", convo.lastMessage || "Start your conversation"));
     btn.append(el("small", "", formatTime(convo.updatedAt)));
     btn.addEventListener("click", () => selectConversation(convo));
     holder.append(btn);
@@ -108,49 +147,74 @@ function renderInbox() {
 
 function contractCard(offer) {
   const card = el("article", "chat-contract");
-  card.append(el("span", "chat-contract-eyebrow", "WORK OFFER / RECORDED IN FREELANZO"));
+  card.append(el("span", "chat-contract-eyebrow", ui("WORK OFFER / RECORDED IN FREELANZO")));
   if (!offer) {
     card.append(el("p", "", "Loading work offer…"));
     return card;
   }
-  card.append(el("h3", "", "Work offer"));
+  card.append(el("h3", "", ui("Work offer")));
   const rows = [
     ["Client/company", offer.companyName],
     ["Payment", formatMoney(offer.amount, offer.currency)],
     ["Working days", (offer.days || []).join(", ")],
     ["Working hours", `${offer.startTime}–${offer.endTime} (${offer.timezone || "local time"})`]
   ];
+  if (offer.deadline) rows.push(["Project deadline", offer.deadline]);
+  if (offer.paymentTerms) rows.push(["Payment terms", PAYMENT_LABELS[offer.paymentTerms] || offer.paymentTerms]);
+  if (offer.paymentDetails) rows.push(["Payment schedule", offer.paymentDetails]);
   for (const [label, value] of rows) {
     const row = el("div", "chat-contract-row");
-    row.append(el("span", "", label), el("strong", "", value));
+    row.append(el("span", "", ui(label)), el("strong", "", String(value || "—")));
     card.append(row);
   }
+  if (offer.workDescription) {
+    const details = el("div", "chat-contract-description");
+    details.append(el("span", "", ui("WORK DESCRIPTION / DELIVERABLES")));
+    details.append(el("p", "", offer.workDescription));
+    card.append(details);
+  }
   const signature = el("div", "chat-signature-record");
-  signature.append(el("span", "", "CLIENT SIGNATURE"));
+  signature.append(el("span", "", ui("CLIENT SIGNATURE IMAGE")));
   const img = el("img");
   img.src = offer.signatureData;
   img.alt = "Signature image supplied by the client";
   img.loading = "lazy";
   signature.append(img);
   card.append(signature);
-  card.append(el("p", `chat-offer-state status-${offer.status}`, `Status: ${offer.status === "accepted" ? "Accepted" : offer.status === "declined" ? "Declined" : "Pending freelancer response"}`));
-  if (offer.respondedAt) card.append(el("small", "", `Responded ${formatTime(offer.respondedAt)}`));
-  if (offer.status === "pending" && me.role === "freelancer") {
+  const labels = { pending: "Pending freelancer response", accepted: "Accepted", declined: "Declined", cancelled: "Cancelled by client" };
+  card.append(el("p", `chat-offer-state status-${offer.status}`, `${ui("Status")}: ${ui(labels[offer.status] || offer.status)}`));
+  if (offer.respondedAt) {
+    card.append(el("small", "", `${ui(offer.status === "cancelled" ? "Cancelled" : "Responded")} ${formatTime(offer.respondedAt)}`));
+  }
+  if (offer.status === "pending" && me.role === "freelancer" && offer.freelancerUid === me.uid) {
     const actions = el("div", "chat-offer-actions");
     for (const [decision, label] of [["accepted", "Accept offer"], ["declined", "Decline offer"]]) {
-      const btn = el("button", decision === "accepted" ? "btn btn-primary" : "btn btn-outline", label);
+      const btn = el("button", decision === "accepted" ? "btn btn-primary" : "btn btn-outline", ui(label));
       btn.type = "button";
-      btn.addEventListener("click", () => respondToOffer(offer.id, decision, btn));
+      btn.addEventListener("click", () => updateOfferStatus(offer.id, decision, btn));
       actions.append(btn);
     }
     card.append(actions);
   }
+  if (offer.status === "pending" && me.role === "client" && offer.clientUid === me.uid) {
+    const actions = el("div", "chat-offer-actions");
+    const btn = el("button", "btn btn-outline", ui("Cancel pending offer"));
+    btn.type = "button";
+    btn.addEventListener("click", () => updateOfferStatus(offer.id, "cancelled", btn));
+    actions.append(btn);
+    card.append(actions);
+  }
   return card;
 }
-async function respondToOffer(offerId, decision, button) {
-  if (busy || !activeConversation || me.role !== "freelancer") return;
+async function updateOfferStatus(offerId, decision, button) {
+  if (busy || !activeConversation || actingOnOffer.has(offerId)) return;
+  const allowed = me.role === "freelancer" ? ["accepted", "declined"] : ["cancelled"];
+  if (!allowed.includes(decision)) return;
+  const action = decision === "accepted" ? "accept" : decision === "declined" ? "decline" : "cancel";
+  if (!window.confirm(`Are you sure you want to ${action} this work offer? This action cannot be undone. The offer terms will remain recorded.`)) return;
   const convoId = activeConversation.id;
   const original = button.textContent;
+  actingOnOffer.add(offerId);
   button.disabled = true;
   button.textContent = "Saving…";
   try {
@@ -160,12 +224,14 @@ async function respondToOffer(offerId, decision, button) {
       if (!snapshot.exists() || snapshot.data().status !== "pending") {
         throw new Error("This offer has already been answered or is unavailable.");
       }
-      if (snapshot.data().freelancerUid !== me.uid) throw new Error("Only the addressed freelancer can respond.");
+      const data = snapshot.data();
+      if (me.role === "freelancer" && data.freelancerUid !== me.uid) throw new Error("Only the addressed freelancer can respond.");
+      if (me.role === "client" && data.clientUid !== me.uid) throw new Error("Only the sending client can cancel this offer.");
       transaction.update(offerRef, { status: decision, respondedAt: serverTimestamp() });
     });
     status(`Offer ${decision}.`, false);
   } catch (error) { status(textError(error), true); }
-  finally { button.disabled = false; button.textContent = original; }
+  finally { actingOnOffer.delete(offerId); button.disabled = false; button.textContent = original; }
 }
 
 function renderMessages() {
@@ -178,7 +244,7 @@ function renderMessages() {
   }
   for (const message of [...messages].reverse()) {
     const item = el("article", message.senderUid === me.uid ? "chat-message is-mine" : "chat-message is-theirs");
-    item.append(el("span", "chat-message-author", message.senderUid === me.uid ? "You" : "Other participant"));
+    item.append(el("span", "chat-message-author", ui(message.senderUid === me.uid ? "You" : "Other participant")));
     if (message.kind === "contract") {
       item.append(contractCard(contracts.get(message.contractId)));
     } else if (message.kind === "text") {
@@ -188,7 +254,10 @@ function renderMessages() {
       // The text-only version no longer downloads, previews or sends chat media.
       item.append(el("p", "chat-message-text", "Attachment unavailable in this text-only chat version."));
     }
-    item.append(el("time", "chat-message-time", formatTime(message.createdAt)));
+    const timeTag = el("time", "chat-message-time", formatTime(message.createdAt));
+    const sentDate = message.createdAt?.toDate?.();
+    if (sentDate) timeTag.dateTime = sentDate.toISOString();
+    item.append(timeTag);
     list.append(item);
   }
   list.scrollTop = list.scrollHeight;
@@ -207,41 +276,46 @@ function selectConversation(convo) {
   $("#chat-message-list").replaceChildren(el("p", "chat-no-messages", "Loading messages…"));
   messagesUnsub = onSnapshot(
     query(collection(db, "conversations", convo.id, "messages"), orderBy("createdAt", "desc"), limit(100)),
-    snapshot => { messages = snapshot.docs.map(item => ({ id: item.id, ...item.data() })); renderMessages(); },
+    snapshot => {
+      if (activeConversation?.id !== convo.id) return;
+      messages = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+      renderMessages();
+      markConversationRead(activeConversation);
+    },
     error => status(textError(error), true)
   );
   contractsUnsub = onSnapshot(
     query(collection(db, "conversations", convo.id, "contracts"), limit(100)),
-    snapshot => { contracts = new Map(snapshot.docs.map(item => [item.id, { id: item.id, ...item.data() }])); renderMessages(); },
+    snapshot => {
+      if (activeConversation?.id !== convo.id) return;
+      contracts = new Map(snapshot.docs.map(item => [item.id, { id: item.id, ...item.data() }]));
+      renderMessages();
+    },
     error => status(textError(error), true)
   );
   $("#chat-compose").reset();
   chatBusy(false);
   closeContractForm();
+  markConversationRead(convo);
   status("Messages are private to the two registered participants.");
 }
 
 async function sendMessage(text, conversationId) {
   const trimmedText = String(text || "").trim();
-  if (!trimmedText || trimmedText.length > 2000) {
-    throw new Error("Enter a text message of at most 2,000 characters.");
-  }
-  if (activeConversation?.id !== conversationId) {
-    throw new Error("Conversation changed before the message was sent.");
-  }
+  if (!trimmedText || trimmedText.length > 2000) throw new Error("Enter a text message of at most 2,000 characters.");
+  if (activeConversation?.id !== conversationId) throw new Error("Conversation changed before the message was sent.");
   const msgRef = doc(collection(db, "conversations", conversationId, "messages"));
   const batch = writeBatch(db);
   batch.set(msgRef, {
-    senderUid: me.uid,
-    kind: "text",
-    text: trimmedText,
-    contractId: "",
-    createdAt: serverTimestamp()
+    senderUid: me.uid, kind: "text", text: trimmedText,
+    contractId: "", createdAt: serverTimestamp()
   });
   batch.update(doc(db, "conversations", conversationId), {
     lastMessage: trimmedText.slice(0, 140),
+    lastMessageId: msgRef.id,
     lastSenderUid: me.uid,
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
+    [me.role === "client" ? "freelancerUnread" : "clientUnread"]: increment(1)
   });
   await batch.commit();
 }
@@ -293,6 +367,7 @@ async function onSendContract(event) {
   event.preventDefault();
   if (busy || !activeConversation || me.role !== "client") return;
   const form = $("#contract-form");
+  $("#contract-deadline").min = todayLocal();
   if (!form.reportValidity()) return;
   const companyName = $("#contract-company").value.trim();
   const amount = Number($("#contract-amount").value);
@@ -300,11 +375,19 @@ async function onSendContract(event) {
   const startTime = $("#contract-start").value;
   const endTime = $("#contract-end").value;
   const timezone = $("#contract-timezone").value.trim();
+  const workDescription = $("#contract-description").value.trim();
+  const deadline = $("#contract-deadline").value;
+  const paymentTerms = $("#contract-payment-terms").value;
+  const paymentDetails = $("#contract-payment-details").value.trim();
   if (companyName.length < 2 || companyName.length > 100) return contractStatus("Enter a client/company name (2–100 characters).", true);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000000) return contractStatus("Enter a valid positive payment amount.", true);
   if (!days.length || days.some(day => !DAYS.includes(day))) return contractStatus("Select at least one working day.", true);
   if (!startTime || !endTime || startTime >= endTime) return contractStatus("Choose a start time earlier than the end time.", true);
   if (!timezone || timezone.length > 50) return contractStatus("Specify the time zone for the working hours.", true);
+  if (workDescription.length < 10 || workDescription.length > 1600) return contractStatus("Describe the work and deliverables (10–1,600 characters).", true);
+  if (!/^20\d{2}-\d{2}-\d{2}$/.test(deadline) || deadline < todayLocal()) return contractStatus("Choose today or a later date as the project deadline.", true);
+  if (!Object.hasOwn(PAYMENT_LABELS, paymentTerms)) return contractStatus("Choose a payment schedule.", true);
+  if (paymentDetails.length > 500 || (paymentTerms === "milestones" && paymentDetails.length < 5)) return contractStatus("Provide milestone payment details (at least 5 characters).", true);
   if (!signatureFile || !SIGNATURE_MIMES.has(signatureFile.type) || signatureFile.size === 0 || signatureFile.size > SIGNATURE_MAX) {
     return contractStatus("Choose a JPG, PNG, or WebP signature image up to 30 KB.", true);
   }
@@ -319,7 +402,8 @@ async function onSendContract(event) {
     batch.set(contractRef, {
       clientUid: me.uid, freelancerUid: convo.freelancerUid,
       companyName, amount, currency: "INR", days,
-      startTime, endTime, timezone,
+      startTime, endTime, timezone, workDescription, deadline,
+      paymentTerms, paymentDetails,
       signatureMime: signatureFile.type, signatureSize: signatureFile.size, signatureData,
       status: "pending", createdAt: serverTimestamp(), respondedAt: null
     });
@@ -328,11 +412,13 @@ async function onSendContract(event) {
       contractId: contractRef.id, createdAt: serverTimestamp()
     });
     batch.update(doc(db, "conversations", convo.id), {
-      lastMessage: "📋 Work offer sent", lastSenderUid: me.uid, updatedAt: serverTimestamp()
+      lastMessage: "📋 Work offer sent", lastMessageId: messageRef.id,
+      lastSenderUid: me.uid, updatedAt: serverTimestamp(),
+      freelancerUnread: increment(1)
     });
     await batch.commit();
     form.reset(); closeContractForm();
-    status("Offer sent. The freelancer can accept or decline it.");
+    status("Offer sent. The freelancer can accept or decline it. You can cancel it while pending.");
   } catch (error) { contractStatus(textError(error), true); }
   finally { chatBusy(false); }
 }
@@ -343,6 +429,16 @@ export function initializeMessaging({ uid, role, displayName }) {
   active = true;
   me = { uid, role, displayName: String(displayName || "Member").slice(0, 80) };
   $("#chat-compose")?.addEventListener("submit", onSend);
+  const deadlineInput = $("#contract-deadline");
+  if (deadlineInput) deadlineInput.min = todayLocal();
+  $("#contract-payment-terms")?.addEventListener("change", () => {
+    const terms = $("#contract-payment-terms").value;
+    const input = $("#contract-payment-details");
+    input.required = terms === "milestones";
+    input.placeholder = terms === "milestones"
+      ? "e.g. 50% after the first draft and 50% on delivery"
+      : "Optional notes about the payment schedule";
+  });
   $("#contract-form")?.addEventListener("submit", onSendContract);
   $("#chat-offer-button")?.addEventListener("click", () => {
     const panel = $("#contract-panel");
@@ -375,6 +471,10 @@ export function initializeMessaging({ uid, role, displayName }) {
     }
   });
   showConversationHeader();
+  window.addEventListener("freelanzo:language-change", () => {
+    renderInbox();
+    renderMessages();
+  });
   inboxUnsub = onSnapshot(
     query(collection(db, "conversations"), where("memberUids", "array-contains", uid), limit(70)),
     snapshot => {
@@ -386,7 +486,10 @@ export function initializeMessaging({ uid, role, displayName }) {
       if (filter) for (const button of $("#chat-inbox-list").querySelectorAll(".chat-inbox-item")) {
         button.hidden = !button.textContent.toLowerCase().includes(filter);
       }
-      if (freshActive) showConversationHeader();
+      if (freshActive) {
+        showConversationHeader();
+        markConversationRead(freshActive);
+      }
     },
     error => status(textError(error), true)
   );
@@ -407,7 +510,8 @@ export async function beginChatWithFreelancer(freelancerUid) {
         clientName: me.displayName,
         freelancerName: String(publicSnap.data().displayName || "Freelancer").slice(0, 80),
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-        lastMessage: "", lastSenderUid: ""
+        lastMessage: "", lastMessageId: "", lastSenderUid: "",
+        clientUnread: 0, freelancerUnread: 0
       });
     } catch (error) {
       // A parallel tab may have created the same deterministic conversation.

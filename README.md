@@ -1,3 +1,11 @@
+# FreeLanzo Phase 4.1 — Chat & Work Offer Refinements
+
+Phase 4.1 adds work descriptions, deadlines, payment terms, offer status/cancellation, unread inbox counts, message timestamps, and confirmation before freelancer accept/decline. The approved text-only messaging and 30 KB signature limit remain unchanged. Final cropped profile photos remain **10–200 KB**.
+
+See **PHASE4_SETUP.md** for required Firestore rule deployment and two-account tests. Publish the matching `firestore.rules` and `js/messaging.js` together; do not deploy the new rule set with the old chat script. Existing accepted/declined offers cannot be modified. This is not verified e-signing or payment processing.
+
+---
+
 ## Phase 3.6 — Freelancer visibility on Dashboard Home
 
 Freelancers now manage their profile **discoverability** from **Dashboard Home**, below the profile completion card and above Quick Access. The toggle and **Save visibility** button have been **moved**, not duplicated. The old visibility panel was removed from Settings; account and security controls remain in Settings. The existing Firestore publishing workflow and permissions are unchanged. English/Hindi/Marathi guidance now points to Dashboard Home.
@@ -19,7 +27,7 @@ Built from **Phase 3.2 Google Auth + guest-navigation fix**, preserving all earl
 5. **Advanced directory filters:** skill search, experience level (Beginner/Intermediate/Expert), availability (Available/Busy), plus existing name search/category, and Clear Filters. Freelancers can set experience and availability on My Profile. Older profiles without the new fields still appear with no advanced filter selected.
 6. **Privacy & deletion:** existing freelancer visibility controls retained. Both roles can request full deletion via Settings. Requires typing `DELETE` plus password reauthentication or Google reauthentication. Deletes their own Firestore portfolios, saved bookmarks, public projects/profile and private user profile; then deletes the Firebase Authentication identity. **Do not use this client-side demo deletion approach in production:** network failures can partially complete deletion and require administrator assistance, Cloudinary unsigned assets are **not** deleted by the browser, and references held in other clients' saved lists are not globally cleaned. A production app needs a trusted backend for reliable orchestration and Cloudinary deletion.
 7. **Automatic login role:** role-selection inputs are **removed from login.html only**. Signup still asks Freelancer/Client and saves it at registration. On login the role is verified from private Firestore `users/{uid}` and `dashboard.html` routes to the matching dashboard. Google signup still rejects an already registered FreeLanzo profile.
-8. **Photo size now 100–200 KB (decimal):** both the selected original JPG/PNG/WebP image **and** the processed upload image must be between 100,000 and 200,000 bytes. Image processing crops centrally and searches for a compliant output at multiple resolutions; images that cannot fit the range are rejected with an explanation. This is **browser-side validation only**. A Cloudinary unsigned preset is publicly callable outside the app and cannot enforce this limit without a verified backend.
+8. **Photo size now 10–200 KB (decimal) after cropping:** original JPG/PNG/WebP image may be up to 10 MB; the processed upload image must be 10,000–200,000 bytes. Image processing crops centrally and searches for a compliant output at multiple resolutions; images that cannot fit the range are rejected with an explanation. This is **browser-side validation only**. A Cloudinary unsigned preset is publicly callable outside the app and cannot enforce this limit without a verified backend.
 
 **Phase 3.3 compatibility fixes:** Existing saved freelancer experience and availability values are loaded back into the edit form. Updating a published avatar rebuilds its public record with the new fields, so older Phase 3.1 profiles work with the revised Firestore rules. Category navigation uses canonical English URL parameters even while interface labels are translated.
 
@@ -39,7 +47,7 @@ Built from **Phase 3.2 Google Auth + guest-navigation fix**, preserving all earl
 - [ ] Profile completion changes after saving bio, photo, and portfolio fields.
 - [ ] A Client can save a published freelancer, see it under Saved Freelancers, remove it, and cannot read another client's saved list.
 - [ ] Freelancer saves Experience and Availability; advanced Explore filters match these values.
-- [ ] Original photo below 100 KB and above 200 KB are rejected; photo within range is processed to an upload of 100–200 KB or a clear validation error.
+- [ ] Original photos up to 10 MB open the crop editor; the final upload is 10–200 KB or shows a clear validation error.
 - [ ] Test freelancer visibility and existing portfolio CRUD; signed-out guests still see the homepage category notice.
 - [ ] On a **disposable test account only**, confirm the delete flow reauthenticates and removes Firestore/Auth account data. Confirm Cloudinary asset deletion still requires an administrator.
 
@@ -117,11 +125,11 @@ export const CLOUDINARY_UPLOAD_PRESET = "freelanzo_profile_photos";
 
 6. Save, reload the page, and try uploading a photo between 100 and 200 KB from **My Profile**.
 
-**Important security/limits:** This static-hosting version uploads directly to a Cloudinary **unsigned** preset. The browser rejects files above **100,000–200,000 bytes (100–200 KB)** and normalizes them to a center-cropped square (400–1000 px, as needed) before upload. Cloudinary does **not** offer a per-unsigned-preset server-enforced file-size limit; an attacker using the public preset outside this UI can bypass browser checks. For a production site that needs a strict server-side 100–200 KB limit or per-user upload permission, add a verified Firebase Auth backend that validates the file and performs signed uploads. Unsigned uploads also require external Cloudinary administration to delete files; pressing **Remove photo** removes the URL from FreeLanzo, but does not delete the Cloudinary asset itself. Never commit a Cloudinary API secret to this repository.
+**Important security/limits:** This static-hosting version uploads directly to a Cloudinary **unsigned** preset. The browser rejects files above **10,000–200,000 bytes (10–200 KB)** and normalizes them to a center-cropped square (400–1000 px, as needed) before upload. Cloudinary does **not** offer a per-unsigned-preset server-enforced file-size limit; an attacker using the public preset outside this UI can bypass browser checks. For a production site that needs a strict server-side 10–200 KB limit or per-user upload permission, add a verified Firebase Auth backend that validates the file and performs signed uploads. Unsigned uploads also require external Cloudinary administration to delete files; pressing **Remove photo** removes the URL from FreeLanzo, but does not delete the Cloudinary asset itself. Never commit a Cloudinary API secret to this repository.
 
 ## 3. Photo upload and display
 
-- On Freelancer and Client dashboards → **My Profile**, choose JPG, PNG, or WebP of **100–200 KB**, preview the cropped image, then click **Upload photo**.
+- On Freelancer and Client dashboards → **My Profile**, choose JPG, PNG, or WebP of **10–200 KB**, preview the cropped image, then click **Upload photo**.
 - Uploaded images are converted to a center-cropped square (400–1000 px, as needed) and compressed (usually to WebP) before upload; we check the upload blob is also between 100 and 200 KB.
 - The Cloudinary HTTPS URL is stored only as `avatarURL` on the private `/users/{uid}` document and copied to the public freelancer directory only when the freelancer has explicitly published their profile.
 - The picture displays in the landing-page signed-in header, dashboard header, sidebar, profile preview, Explore listings, and published freelancer profile page.
@@ -131,7 +139,7 @@ export const CLOUDINARY_UPLOAD_PRESET = "freelanzo_profile_photos";
 ## 4. Read-only public freelancer profile
 
 1. Sign in as a **Freelancer**. In **My Portfolios**, add one or more project descriptions.
-2. In **Settings**, enable **Make my freelancer profile discoverable**, then **Save visibility**. Existing projects are copied into an allowlisted public project collection; unpublished projects stay accessible only to you.
+2. On **Dashboard Home**, enable **Make my freelancer profile discoverable**, then **Save visibility**. Existing projects are copied into an allowlisted public project collection; unpublished projects stay accessible only to you.
 3. Sign in as a **Client** (or another Freelancer). Open **Explore Freelancers**, choose a real published person and click **View full profile**.
 4. The new `freelancer-profile.html?id=<uid>` shows: their chosen photo, name, headline, category, location, bio, skills, and published projects with optional safe project links. There are **no edit/delete buttons** and the viewer's Firestore rules cannot write to someone else's profile or projects.
 5. Contact fields such as the registered **email** (or any private account field) are never copied to public collections. The app also attempts to redact typical phone/email patterns if they are accidentally typed in the published bio, titles or descriptions. Redaction is best-effort; advise users never to place sensitive information in free-text public fields.
@@ -153,7 +161,7 @@ Firestore **security rules**, not hidden UI controls, enforce access. No `allow 
 
 - [ ] Existing signup (Google + email/password), login, role checks and password reset still work.
 - [ ] Freelancer and Client both upload an image between 100 and 200 KB; show it in the header, sidebar and My Profile.
-- [ ] A file outside 100–200 KB is rejected with a message; non-image types are rejected.
+- [ ] A file outside 10–200 KB is rejected with a message; non-image types are rejected.
 - [ ] Profile photos can be removed and revert to initials.
 - [ ] A freelancer who has not published does **not** appear in Explore.
 - [ ] Publish a freelancer; open their **View full profile** link as a Client.
@@ -203,7 +211,7 @@ while logged out as well. Refresh with Ctrl+Shift+R if the browser cached old JS
 
 
 ### Photo crop editor (Phase 3.3 refinement)
-Selecting a JPG, PNG or WebP between 100 KB and 200 KB opens a crop dialog. Drag to reposition the square crop, use the zoom slider (1–4×), and press **Use this crop**. Keyboard users can focus the canvas and use arrow keys (Shift+arrows for larger movement). The crop is compressed to a 100–200 KB square prior to Cloudinary upload. Cancel does not change the saved profile photo. All size checks are client-side only; Cloudinary does not enforce them unless configured server-side.
+Selecting an original JPG, PNG or WebP up to 10 MB opens a crop dialog. Drag to reposition the square crop, use the zoom slider (1–4×), and press **Use this crop**. Keyboard users can focus the canvas and use arrow keys (Shift+arrows for larger movement). The crop is compressed to a 10–200 KB square prior to Cloudinary upload. Cancel does not change the saved profile photo. All size checks are client-side only; Cloudinary does not enforce them unless configured server-side.
 
 ---
 
@@ -215,7 +223,7 @@ This update fixes the inconsistent dark mode and partially untranslated content 
 - **Broader multilingual coverage:** Hindi and Marathi translations now cover homepage hero and section titles, descriptive copy, buttons, navigation, category guest notices/counts, account page headings, profile/directory UI, and privacy/terms pages. Dynamic directory counts and category guest notices are localized. User-provided profile and project text is intentionally not machine-translated.
 - **Better Devanagari layout:** Headings use a Devanagari-capable font fallback and adjusted tracking, line height and size; translated navigation collapses into a mobile-style menu at narrower widths.
 - **Translation accessibility:** Placeholder text, aria labels and title attributes can now be translated when a translation is provided. Language selection persists in local storage as before.
-- **Accurate copy:** Replaced stale pre-portfolio and 500 KB statements with current Phase 3.3 features and the 100–200 KB original/processed photo upload condition. Terms/Privacy remain student-project drafts and require review before production.
+- **Accurate copy:** Replaced stale pre-portfolio and 500 KB statements with current Phase 3.3 features and the 10–200 KB final cropped photo upload condition. Terms/Privacy remain student-project drafts and require review before production.
 
 **Files modified compared with the Phase 3.3 crop-editor package:** `preferences.css`, `js/ui-preferences.js`, `index.html`, `dashboard.html`, `privacy.html`, `terms.html`, and `README.md`. No Firebase config or Firestore rules changes required for this visual/language fix.
 
@@ -231,4 +239,52 @@ This update fixes the inconsistent dark mode and partially untranslated content 
 - A minimal `localStorage` recovery marker associated with the authenticated Firebase UID allows deletion to be **resumed on the same browser** if the operation fails after the Firestore account document is removed. Keep browser storage and don't sign up again until deletion is complete. If the page is reloaded with the profile already gone, a recovery panel appears.
 - **Important limitations:** A browser-only/static GitHub Pages app **cannot provide guaranteed atomic deletion** across Firestore, Firebase Authentication, and Cloudinary. A second device, revoked permissions, or a network outage can interrupt the process. The recovery marker is device-local. For production-grade guaranteed cleanup (including Cloudinary assets and cross-user references), use a securely authenticated Firebase Cloud Function or other backend with administrative credentials and a durable deletion job. Never put Firebase Admin keys or the Cloudinary API secret in browser JavaScript.
 - Firestore rules and Firebase configuration are unchanged. Test deletion ONLY with disposable test accounts; it is irreversible. Be sure to test both Client and Freelancer flows, including Google and password reauthentication and recovery after intentionally interrupting a request.
-- **Known scope**: The 100–200 KB avatar restriction from the provided Phase 3.6 base is unchanged. This patch does not include the optional 10–200 KB change discussed later.
+- **Known scope**: Phase 4 now enforces 10–200 KB on the final cropped avatar, with originals up to 10 MB.
+
+
+---
+# Phase 4 — Real-Time Text Chat & Work Offers (17 November 2026)
+
+This version deliberately removes all media attachments from chat. Two registered participants (one Client and one Freelancer) can exchange **text messages only**, stored in Firestore and updated in real time using `onSnapshot`. The inbox shows conversations and most recent message previews. Clients can initiate chats from Explore or a public freelancer profile. The Freelancer can reply.
+
+## Client work offers
+
+Clients can send a recorded work offer inside a chat with:
+- Client/company or person name
+- Payment amount in INR
+- Selected working days and start/end working hours, with time zone
+- Client signature image in JPG, PNG or WebP **up to 30 KB** (stored privately as a base64 data URL in Firestore)
+
+Freelancers can **Accept** or **Decline** a pending offer. Both parties see the outcome in real time. It is a student-project offer record, not an identity-verified legal e-signature or payment service.
+
+## Firebase setup
+
+1. Publish `firestore.rules` from this release in Firebase Console → Firestore Database → Rules. If you've customized rules beyond FreeLanzo, **merge rather than blindly overwrite**.
+2. No Firebase Storage setup, CORS file, Storage rules, or paid Cloud Storage plan is needed for text messaging, offers, or the 30 KB signature image.
+3. Cloudinary remains configured for public profile pictures and is unrelated to chat.
+4. If you deployed a previous media-upload version, separately restrict any existing Firebase Storage `chats/` rules and remove old files as appropriate. Deleting `storage.rules` from this ZIP **does not** undeploy rules or delete already stored media.
+
+## Testing checklist
+
+- [ ] Client starts a conversation with a published Freelancer; both see it in Messages.
+- [ ] Both send text that appears without refresh; history persists after reload.
+- [ ] There is no paperclip/file picker; blank messages cannot be sent.
+- [ ] Client sends a signed work offer (signature JPG/PNG/WebP, <=30,000 bytes) with company/name, INR amount, working days, hours, and time zone.
+- [ ] Freelancer Accepts or Declines; both accounts show the updated decision.
+- [ ] Third registered account cannot read the private conversation or offer.
+- [ ] Attempts to create `kind: 'file'` messages fail against Firestore security rules.
+- [ ] Hindi/Marathi and dark mode, bookmarks, profile visibility, and dashboard behavior still work.
+- [ ] Final cropped profile photos remain **10–200 KB**; originals can be up to **10 MB**.
+
+## Changed files in this text-only variant
+
+- `js/messaging.js` — removed Storage imports, file previews, uploads and attachment handling; text and work offers preserved.
+- `client-dashboard.html`, `freelancer-dashboard.html` — removed media attachment UI.
+- `firestore.rules` — denies file messages, permits text and contract markers.
+- `dashboard.css` — removed attachment-specific styling.
+- `js/ui-preferences.js` — removed obsolete attachment translations, updated chat description.
+- `privacy.html`, `terms.html` — descriptions no longer promise chat media uploads.
+- `PHASE4_SETUP.md`, `README.md` — updated setup and tests.
+- Removed legacy `storage.rules` and `storage-cors.json` from this release (not required by text-only chat).
+
+**Validation:** Local syntax, file-integrity, and interface checks cannot confirm live Firestore permissions. Publish the rules and test with disposable accounts before a demo.

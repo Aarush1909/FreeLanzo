@@ -266,3 +266,28 @@
 @media(max-width:700px){.chat-shell{grid-template-columns:1fr}.chat-inbox{border-right:0;border-bottom:1px solid var(--border,#ccc)}.chat-inbox-list{max-height:230px}.chat-room-header{flex-direction:row}.chat-message-list{height:350px}.chat-message{max-width:92%}}
 @media(max-width:390px){.chat-room-header{flex-direction:column}.contract-hours{grid-template-columns:1fr}}
 #public-contact[hidden]{display:none!important}
+
+
+/* Phase 4.1 — contract details, status indicators and inbox unread counts */
+.chat-contract-form textarea,
+.chat-contract-form select,
+.chat-contract-form input[type="date"]{
+  width:100%;max-width:100%;box-sizing:border-box;min-height:42px;
+  padding:10px 12px;border:1px solid var(--border,#ddd);
+  background:var(--white,#fff);color:var(--ink,#161716);font:inherit
+}
+.chat-contract-form textarea{resize:vertical;line-height:1.55;min-height:78px}
+.chat-contract-form .quiet-note{font-size:11px;line-height:1.5}
+.chat-contract-description{padding:12px 0;border-top:1px solid var(--border,#ddd)}
+.chat-contract-description span{display:block;font:700 10px/1.5 'Courier New',monospace;color:var(--muted,#666)}
+.chat-contract-description p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;font-size:13px;margin:8px 0 0}
+.chat-inbox-name-row{display:flex!important;align-items:center;justify-content:space-between;gap:8px;width:100%;white-space:normal!important}
+.chat-inbox-name-row strong{flex:1;min-width:0}
+.chat-unread-badge{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:23px;height:23px;padding:0 5px;border-radius:12px;color:#fff;background:#c52e29;font:700 11px 'Courier New',monospace}
+.chat-inbox-item.has-unread .chat-inbox-preview{font-weight:700;color:var(--ink,#161716)}
+.chat-unread-total{font:700 10px/1.4 'Courier New',monospace;color:var(--muted,#666)}
+.chat-offer-state.status-accepted{color:#16834f}
+.chat-offer-state.status-declined{color:#bd4336}
+.chat-offer-state.status-cancelled{color:var(--muted,#666)}
+.chat-offer-state.status-pending{color:#ad7514}
+@media(max-width:520px){.chat-contract-form{gap:12px}.chat-contract-panel{margin:0 10px 14px;padding:13px}.chat-contract-description{padding:10px 0}}

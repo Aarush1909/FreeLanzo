@@ -153,22 +153,34 @@ service cloud.firestore {
       }
     }
 
-    // Phase 4: conversations between one Client and one Freelancer.
-    // Users may read only their own conversations; the sender is server-validated.
+    // Phase 4.1: private text conversations, atomic unread counters and immutable offers.
+    // getAfter() verifies that a chat message and its updated inbox preview
+    // are committed in the same Firestore batch. The rules also prevent
+    // changing the other participant's unread count during read acknowledgement.
     function conversation(cid) {
       return get(/databases/$(database)/documents/conversations/$(cid)).data;
     }
     function isConversationMember(cid) {
       return signedIn() && request.auth.uid in conversation(cid).memberUids;
     }
+    function validUnreadNumbers(data) {
+      return data.get('clientUnread', 0) is int &&
+        data.get('freelancerUnread', 0) is int &&
+        data.get('clientUnread', 0) >= 0 &&
+        data.get('freelancerUnread', 0) >= 0 &&
+        data.get('clientUnread', 0) <= 999999 &&
+        data.get('freelancerUnread', 0) <= 999999;
+    }
     function validConversationIdentity(cid) {
       return request.resource.data.keys().hasOnly([
         'clientUid', 'freelancerUid', 'memberUids', 'clientName', 'freelancerName',
-        'createdAt', 'updatedAt', 'lastMessage', 'lastSenderUid'
+        'createdAt', 'updatedAt', 'lastMessage', 'lastMessageId', 'lastSenderUid',
+        'clientUnread', 'freelancerUnread'
       ]) &&
       request.resource.data.keys().hasAll([
         'clientUid', 'freelancerUid', 'memberUids', 'clientName', 'freelancerName',
-        'createdAt', 'updatedAt', 'lastMessage', 'lastSenderUid'
+        'createdAt', 'updatedAt', 'lastMessage', 'lastMessageId', 'lastSenderUid',
+        'clientUnread', 'freelancerUnread'
       ]) &&
       request.resource.data.clientUid == request.auth.uid &&
       request.resource.data.clientUid != request.resource.data.freelancerUid &&
@@ -183,11 +195,50 @@ service cloud.firestore {
       request.resource.data.freelancerName.size() > 0 && request.resource.data.freelancerName.size() <= 80 &&
       request.resource.data.createdAt == request.time &&
       request.resource.data.updatedAt == request.time &&
-      request.resource.data.lastMessage == '' && request.resource.data.lastSenderUid == '';
+      request.resource.data.lastMessage == '' &&
+      request.resource.data.lastMessageId == '' &&
+      request.resource.data.lastSenderUid == '' &&
+      request.resource.data.clientUnread == 0 &&
+      request.resource.data.freelancerUnread == 0;
     }
-    function validChatMessage(cid) {
-      // Only text messages and client work-offer markers can be created.
-      // File attachments are deliberately unsupported in Phase 4.
+    function validReadReceipt(cid) {
+      return isConversationMember(cid) && validUnreadNumbers(request.resource.data) &&
+        (
+          (request.auth.uid == resource.data.clientUid &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clientUnread']) &&
+           request.resource.data.get('clientUnread', 0) == 0) ||
+          (request.auth.uid == resource.data.freelancerUid &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['freelancerUnread']) &&
+           request.resource.data.get('freelancerUnread', 0) == 0)
+        );
+    }
+    function validSendPreview(cid) {
+      return isConversationMember(cid) &&
+        validUnreadNumbers(request.resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastMessage', 'lastMessageId', 'lastSenderUid', 'updatedAt',
+          'clientUnread', 'freelancerUnread'
+        ]) &&
+        request.resource.data.lastMessage is string &&
+        request.resource.data.lastMessage.size() > 0 &&
+        request.resource.data.lastMessage.size() <= 160 &&
+        request.resource.data.lastMessageId is string &&
+        request.resource.data.lastMessageId.size() > 0 &&
+        request.resource.data.lastMessageId.size() <= 150 &&
+        request.resource.data.lastSenderUid == request.auth.uid &&
+        request.resource.data.updatedAt == request.time &&
+        getAfter(/databases/$(database)/documents/conversations/$(cid)/messages/$(request.resource.data.lastMessageId)).data.senderUid == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/conversations/$(cid)/messages/$(request.resource.data.lastMessageId)).data.createdAt == request.time &&
+        (
+          (request.auth.uid == resource.data.clientUid &&
+           request.resource.data.get('clientUnread', 0) == resource.data.get('clientUnread', 0) &&
+           request.resource.data.get('freelancerUnread', 0) == resource.data.get('freelancerUnread', 0) + 1) ||
+          (request.auth.uid == resource.data.freelancerUid &&
+           request.resource.data.get('freelancerUnread', 0) == resource.data.get('freelancerUnread', 0) &&
+           request.resource.data.get('clientUnread', 0) == resource.data.get('clientUnread', 0) + 1)
+        );
+    }
+    function validChatMessage(cid, messageId) {
       return request.resource.data.keys().hasOnly([
         'senderUid', 'kind', 'text', 'contractId', 'createdAt'
       ]) && request.resource.data.keys().hasAll([
@@ -200,22 +251,29 @@ service cloud.firestore {
       request.resource.data.text.size() <= 2000 &&
       request.resource.data.contractId is string &&
       request.resource.data.contractId.size() <= 150 &&
+      getAfter(/databases/$(database)/documents/conversations/$(cid)).data.lastMessageId == messageId &&
+      getAfter(/databases/$(database)/documents/conversations/$(cid)).data.lastSenderUid == request.auth.uid &&
+      getAfter(/databases/$(database)/documents/conversations/$(cid)).data.updatedAt == request.time &&
       ((request.resource.data.kind == 'text' &&
         request.resource.data.text.size() > 0 &&
         request.resource.data.contractId == '') ||
        (request.resource.data.kind == 'contract' &&
         request.auth.uid == conversation(cid).clientUid &&
         request.resource.data.contractId.size() > 0 &&
-        request.resource.data.text == 'Work offer'));
+        request.resource.data.text == 'Work offer' &&
+        getAfter(/databases/$(database)/documents/conversations/$(cid)/contracts/$(request.resource.data.contractId)).data.clientUid == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/conversations/$(cid)/contracts/$(request.resource.data.contractId)).data.createdAt == request.time));
     }
     function validWorkOffer(cid) {
       return request.resource.data.keys().hasOnly([
         'clientUid', 'freelancerUid', 'companyName', 'amount', 'currency', 'days',
-        'startTime', 'endTime', 'timezone', 'signatureMime', 'signatureSize',
+        'startTime', 'endTime', 'timezone', 'workDescription', 'deadline',
+        'paymentTerms', 'paymentDetails', 'signatureMime', 'signatureSize',
         'signatureData', 'status', 'createdAt', 'respondedAt'
       ]) && request.resource.data.keys().hasAll([
         'clientUid', 'freelancerUid', 'companyName', 'amount', 'currency', 'days',
-        'startTime', 'endTime', 'timezone', 'signatureMime', 'signatureSize',
+        'startTime', 'endTime', 'timezone', 'workDescription', 'deadline',
+        'paymentTerms', 'paymentDetails', 'signatureMime', 'signatureSize',
         'signatureData', 'status', 'createdAt', 'respondedAt'
       ]) &&
       request.auth.uid == conversation(cid).clientUid &&
@@ -232,8 +290,18 @@ service cloud.firestore {
       request.resource.data.startTime.matches('([01][0-9]|2[0-3]):[0-5][0-9]') &&
       request.resource.data.endTime is string &&
       request.resource.data.endTime.matches('([01][0-9]|2[0-3]):[0-5][0-9]') &&
+      request.resource.data.startTime < request.resource.data.endTime &&
       request.resource.data.timezone is string &&
       request.resource.data.timezone.size() > 0 && request.resource.data.timezone.size() <= 50 &&
+      request.resource.data.workDescription is string &&
+      request.resource.data.workDescription.size() >= 10 &&
+      request.resource.data.workDescription.size() <= 1600 &&
+      request.resource.data.deadline is string &&
+      request.resource.data.deadline.matches('20[0-9]{2}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])') &&
+      request.resource.data.paymentTerms in ['completion', 'milestones', 'weekly', 'upfront'] &&
+      request.resource.data.paymentDetails is string &&
+      request.resource.data.paymentDetails.size() <= 500 &&
+      (request.resource.data.paymentTerms != 'milestones' || request.resource.data.paymentDetails.size() >= 5) &&
       request.resource.data.signatureMime in ['image/jpeg', 'image/png', 'image/webp'] &&
       request.resource.data.signatureSize is int &&
       request.resource.data.signatureSize > 0 && request.resource.data.signatureSize <= 30000 &&
@@ -246,34 +314,32 @@ service cloud.firestore {
     }
 
     match /conversations/{cid} {
-      // Nonexistent IDs may be checked when opening a new chat; existing data
-      // stays unreadable to all nonparticipants.
+      // The client is allowed to check for a missing deterministic conversation.
       allow get: if signedIn() && (resource == null || request.auth.uid in resource.data.memberUids);
       allow list: if signedIn() && request.query.limit <= 70 && request.auth.uid in resource.data.memberUids;
       allow create: if signedIn() && validConversationIdentity(cid);
-      // Only previews and activity timestamps may be changed after creation.
-      allow update: if isConversationMember(cid) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastSenderUid', 'updatedAt']) &&
-        request.resource.data.lastMessage is string && request.resource.data.lastMessage.size() <= 160 &&
-        request.resource.data.lastSenderUid == request.auth.uid &&
-        request.resource.data.updatedAt == request.time;
+      allow update: if validReadReceipt(cid) || validSendPreview(cid);
       allow delete: if false;
 
       match /messages/{messageId} {
         allow get: if isConversationMember(cid);
         allow list: if isConversationMember(cid) && request.query.limit <= 120;
-        allow create: if isConversationMember(cid) && validChatMessage(cid);
+        allow create: if isConversationMember(cid) && validChatMessage(cid, messageId);
         allow update, delete: if false;
       }
       match /contracts/{contractId} {
         allow get: if isConversationMember(cid);
         allow list: if isConversationMember(cid) && request.query.limit <= 100;
         allow create: if isConversationMember(cid) && validWorkOffer(cid);
+        // After submission the contract's terms and signature are immutable.
+        // Freelancer may accept/decline; client may cancel while pending.
         allow update: if isConversationMember(cid) &&
-          request.auth.uid == resource.data.freelancerUid &&
           resource.data.status == 'pending' &&
+          ((request.auth.uid == resource.data.freelancerUid &&
+            request.resource.data.status in ['accepted', 'declined']) ||
+           (request.auth.uid == resource.data.clientUid &&
+            request.resource.data.status == 'cancelled')) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']) &&
-          request.resource.data.status in ['accepted', 'declined'] &&
           request.resource.data.respondedAt == request.time;
         allow delete: if false;
       }

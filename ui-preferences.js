@@ -20,6 +20,44 @@ const UI_TEXT = {
   "Work starts *": {"hi": "काम शुरू होने का समय *", "mr": "काम सुरू होण्याची वेळ *"},
   "Work ends *": {"hi": "काम समाप्त होने का समय *", "mr": "काम संपण्याची वेळ *"},
   "Time zone *": {"hi": "समय क्षेत्र *", "mr": "वेळ क्षेत्र *"},
+  "Work description / deliverables *": {"hi": "काम का विवरण / डिलिवरेबल्स *", "mr": "कामाचे वर्णन / अपेक्षित काम *"},
+  "Include what will be delivered so both people understand the offer.": {"hi": "क्या सौंपा जाएगा, यह लिखें ताकि दोनों पक्ष प्रस्ताव समझ सकें।", "mr": "काय सुपूर्द केले जाईल ते लिहा, जेणेकरून दोघांनाही ऑफर समजेल."},
+  "Project deadline *": {"hi": "प्रोजेक्ट की अंतिम तारीख *", "mr": "प्रकल्पाची अंतिम मुदत *"},
+  "Payment terms *": {"hi": "भुगतान की शर्तें *", "mr": "देयकाच्या अटी *"},
+  "Choose payment terms": {"hi": "भुगतान की शर्तें चुनें", "mr": "देयकाच्या अटी निवडा"},
+  "On project completion": {"hi": "प्रोजेक्ट पूरा होने पर", "mr": "प्रकल्प पूर्ण झाल्यावर"},
+  "In agreed milestones": {"hi": "तय चरणों के अनुसार", "mr": "ठरलेल्या टप्प्यांनुसार"},
+  "Weekly payments": {"hi": "साप्ताहिक भुगतान", "mr": "साप्ताहिक देयके"},
+  "Before work begins": {"hi": "काम शुरू होने से पहले", "mr": "काम सुरू होण्यापूर्वी"},
+  "Payment schedule / milestone details (required for milestones)": {"hi": "भुगतान का शेड्यूल / चरणों का विवरण (चरणों के लिए ज़रूरी)", "mr": "देयकाचे वेळापत्रक / टप्प्यांचा तपशील (टप्प्यांसाठी आवश्यक)"},
+  "Work offers are recorded in Firestore. Sent offers cannot be edited; to change terms, cancel the pending offer and send a new one. This is not a legally verified signature or payment service.": {"hi": "काम के प्रस्ताव Firestore में दर्ज होते हैं। भेजे गए प्रस्ताव में बदलाव नहीं हो सकता; शर्तें बदलने के लिए लंबित प्रस्ताव रद्द करके नया भेजें। यह सत्यापित हस्ताक्षर या भुगतान सेवा नहीं है।", "mr": "कामाच्या ऑफर Firestore मध्ये नोंदवल्या जातात. पाठवलेली ऑफर बदलता येत नाही; अटी बदलण्यासाठी प्रलंबित ऑफर रद्द करून नवीन पाठवा. ही सत्यापित स्वाक्षरी किंवा पेमेंट सेवा नाही."},
+  "Only clients send offers. Freelancers can accept or decline; clients may cancel pending offers.": {"hi": "केवल ग्राहक प्रस्ताव भेज सकते हैं। फ्रीलांसर स्वीकार या अस्वीकार कर सकते हैं; ग्राहक लंबित प्रस्ताव रद्द कर सकते हैं।", "mr": "फक्त क्लायंट ऑफर पाठवू शकतात. फ्रीलान्सर स्वीकारू किंवा नाकारू शकतात; क्लायंट प्रलंबित ऑफर रद्द करू शकतात."},
+  "Describe the project, deliverables, and expected scope": {"hi": "प्रोजेक्ट, डिलिवरेबल्स और अपेक्षित काम का विवरण दें", "mr": "प्रकल्प, डिलिव्हरेबल्स आणि अपेक्षित कामाचे वर्णन करा"},
+  "e.g. 50% after first draft, 50% on delivery": {"hi": "जैसे पहले ड्राफ्ट पर 50%, डिलिवरी पर 50%", "mr": "उदा. पहिल्या मसुद्यानंतर 50%, सुपूर्द केल्यावर 50%"},
+  "All read": {"hi": "सभी पढ़ लिए", "mr": "सर्व वाचले"},
+  "Work offer": {hi:"काम का प्रस्ताव",mr:"कामाची ऑफर"},
+  "WORK OFFER / RECORDED IN FREELANZO": {hi:"काम का प्रस्ताव / फ्रीलैंज़ो में दर्ज",mr:"कामाची ऑफर / फ्रीलॅन्झोमध्ये नोंदवली"},
+  "Client/company": {hi:"ग्राहक/कंपनी",mr:"क्लायंट/कंपनी"},
+  "Payment": {hi:"भुगतान",mr:"देयक"},
+  "Working days": {hi:"कार्य दिवस",mr:"कामाचे दिवस"},
+  "Working hours": {hi:"काम के घंटे",mr:"कामाचे तास"},
+  "Project deadline": {hi:"प्रोजेक्ट की अंतिम तारीख",mr:"प्रकल्पाची अंतिम मुदत"},
+  "Payment terms": {hi:"भुगतान की शर्तें",mr:"देयकाच्या अटी"},
+  "Payment schedule": {hi:"भुगतान समय-सारणी",mr:"देयकाचे वेळापत्रक"},
+  "WORK DESCRIPTION / DELIVERABLES": {hi:"काम का विवरण / डिलिवरेबल्स",mr:"कामाचे वर्णन / अपेक्षित काम"},
+  "CLIENT SIGNATURE IMAGE": {hi:"ग्राहक के हस्ताक्षर की तस्वीर",mr:"क्लायंटच्या स्वाक्षरीचे चित्र"},
+  "Status": {hi:"स्थिति",mr:"स्थिती"},
+  "Pending freelancer response": {hi:"फ्रीलांसर के उत्तर की प्रतीक्षा",mr:"फ्रीलान्सरच्या उत्तराची प्रतीक्षा"},
+  "Accepted": {hi:"स्वीकृत",mr:"स्वीकारले"},
+  "Declined": {hi:"अस्वीकृत",mr:"नाकारले"},
+  "Cancelled": {hi:"रद्द किया गया",mr:"रद्द केले"},
+  "Cancelled by client": {hi:"ग्राहक द्वारा रद्द",mr:"क्लायंटने रद्द केले"},
+  "Responded": {hi:"जवाब दिया",mr:"उत्तर दिले"},
+  "Accept offer": {hi:"प्रस्ताव स्वीकार करें",mr:"ऑफर स्वीकारा"},
+  "Decline offer": {hi:"प्रस्ताव अस्वीकार करें",mr:"ऑफर नाकारा"},
+  "Cancel pending offer": {hi:"लंबित प्रस्ताव रद्द करें",mr:"प्रलंबित ऑफर रद्द करा"},
+  "You": {hi:"आप",mr:"तुम्ही"},
+  "Other participant": {hi:"दूसरा प्रतिभागी",mr:"इतर सहभागी"},
   "Client digital signature image (max 30 KB) *": {"hi": "ग्राहक के हस्ताक्षर की तस्वीर (अधिकतम 30 KB) *", "mr": "क्लायंटच्या स्वाक्षरीचे चित्र (कमाल 30 KB) *"},
   "Send work offer ↗": {"hi": "प्रस्ताव भेजें ↗", "mr": "ऑफर पाठवा ↗"},
   "Message freelancer ↗": {"hi": "फ्रीलांसर को संदेश भेजें ↗", "mr": "फ्रीलान्सरला संदेश पाठवा ↗"},
@@ -1694,6 +1732,8 @@ function localizeEnglish(original) {
   if (match) return language === "hi"
     ? `${match[1]} / ${match[2]} श्रेणियाँ दिखाई जा रही हैं`
     : `${match[1]} / ${match[2]} श्रेणी दाखवत आहोत`;
+  match = original.match(/^(\d+) unread(?: messages)?$/);
+  if (match) return language === "hi" ? `${match[1]} अपठित संदेश` : `${match[1]} न वाचलेले संदेश`;
   match = original.match(/^(\d+) saved freelancers?$/);
   if (match) return language === "hi" ? `${match[1]} फ्रीलांसर सेव किए गए` : `${match[1]} फ्रीलान्सर जतन केले`;
   match = original.match(/^Next: (.+)$/);
