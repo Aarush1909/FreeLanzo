@@ -1,6 +1,33 @@
 // FreeLanzo Phase 3.3 — lightweight, no-API multilingual UI and theme switcher.
 // Translates known interface strings only; never automatically translates user data.
 const UI_TEXT = {
+  "Conversations": {"hi": "बातचीत", "mr": "संभाषणे"},
+  "LIVE INBOX": {"hi": "लाइव इनबॉक्स", "mr": "थेट इनबॉक्स"},
+  "Search chats": {"hi": "चैट खोजें", "mr": "चॅट शोधा"},
+  "Choose a conversation": {"hi": "कोई बातचीत चुनें", "mr": "संभाषण निवडा"},
+  "Select a chat, or start one from Explore Freelancers.": {"hi": "कोई चैट चुनें या फ्रीलांसर खोज से शुरू करें।", "mr": "चॅट निवडा किंवा फ्रीलान्सर शोधातून सुरू करा."},
+  "Start a conversation": {"hi": "बातचीत शुरू करें", "mr": "संभाषण सुरू करा"},
+  "Clients can message a published freelancer from Explore Freelancers. Replies will appear here instantly.": {"hi": "ग्राहक फ्रीलांसर खोज से संदेश भेज सकते हैं। जवाब यहाँ तुरंत दिखेंगे।", "mr": "क्लायंट्स फ्रीलान्सर शोधातून संदेश पाठवू शकतात. उत्तरे लगेच दिसतील."},
+  "Write a message…": {"hi": "संदेश लिखें…", "mr": "संदेश लिहा…"},
+  "Write a message": {"hi": "संदेश लिखें", "mr": "संदेश लिहा"},
+  "Send ↗": {"hi": "भेजें ↗", "mr": "पाठवा ↗"},
+  "+ Work offer": {"hi": "+ काम का प्रस्ताव", "mr": "+ कामाची ऑफर"},
+  "Send a work offer": {"hi": "काम का प्रस्ताव भेजें", "mr": "कामाची ऑफर पाठवा"},
+  "Close": {"hi": "बंद करें", "mr": "बंद करा"},
+  "Client company/person name *": {"hi": "ग्राहक कंपनी/व्यक्ति का नाम *", "mr": "क्लायंट कंपनी/व्यक्तीचे नाव *"},
+  "Amount to be paid (INR) *": {"hi": "भुगतान राशि (INR) *", "mr": "देय रक्कम (INR) *"},
+  "Working days *": {"hi": "काम के दिन *", "mr": "कामाचे दिवस *"},
+  "Work starts *": {"hi": "काम शुरू होने का समय *", "mr": "काम सुरू होण्याची वेळ *"},
+  "Work ends *": {"hi": "काम समाप्त होने का समय *", "mr": "काम संपण्याची वेळ *"},
+  "Time zone *": {"hi": "समय क्षेत्र *", "mr": "वेळ क्षेत्र *"},
+  "Client digital signature image (max 30 KB) *": {"hi": "ग्राहक के हस्ताक्षर की तस्वीर (अधिकतम 30 KB) *", "mr": "क्लायंटच्या स्वाक्षरीचे चित्र (कमाल 30 KB) *"},
+  "Send work offer ↗": {"hi": "प्रस्ताव भेजें ↗", "mr": "ऑफर पाठवा ↗"},
+  "Message freelancer ↗": {"hi": "फ्रीलांसर को संदेश भेजें ↗", "mr": "फ्रीलान्सरला संदेश पाठवा ↗"},
+  "No conversations yet. Clients can start a chat from Explore Freelancers.": {"hi": "अभी कोई बातचीत नहीं है। ग्राहक फ्रीलांसर खोज से शुरू कर सकते हैं।", "mr": "अजून संभाषणे नाहीत. क्लायंट्स फ्रीलान्सर शोधातून सुरुवात करू शकतात."},
+  "This is a recorded offer, not a verified legal e-signature or payment mechanism. Review details before sending.": {"hi": "यह दर्ज किया गया प्रस्ताव है, सत्यापित कानूनी ई-हस्ताक्षर या भुगतान प्रणाली नहीं। भेजने से पहले जाँचें।", "mr": "ही नोंदवलेली ऑफर आहे, सत्यापित कायदेशीर ई-स्वाक्षरी किंवा पेमेंट प्रणाली नाही. पाठवण्यापूर्वी तपासा."},
+  "Client signatures are stored privately with the offer, not published to the freelancer directory.": {"hi": "ग्राहक के हस्ताक्षर प्रस्ताव के साथ निजी तौर पर रखे जाते हैं, सार्वजनिक सूची में नहीं।", "mr": "क्लायंटच्या स्वाक्षऱ्या ऑफरसोबत खाजगी ठेवतात, सार्वजनिक यादीत नाही."},
+  "Only the client can send an offer; the freelancer can accept or decline.": {"hi": "केवल ग्राहक प्रस्ताव भेज सकता है; फ्रीलांसर स्वीकार या अस्वीकार कर सकता है।", "mr": "फक्त क्लायंट ऑफर पाठवू शकतो; फ्रीलान्सर स्वीकारू किंवा नाकारू शकतो."},
+  "Private text conversations and client work offers. No chat attachments.": {"hi": "निजी टेक्स्ट चैट और क्लाइंट के काम के प्रस्ताव। चैट में फ़ाइल भेजना उपलब्ध नहीं है।", "mr": "खाजगी मजकूर संदेश आणि क्लायंटच्या कामाच्या ऑफर. चॅटमध्ये फाइल पाठवता येत नाही."},
   "Home": {
     "hi": "होम",
     "mr": "मुख्यपृष्ठ"
@@ -885,9 +912,9 @@ const UI_TEXT = {
     "hi": "रियल-टाइम मैसेजिंग आने पर बातचीत यहाँ दिखेगी।",
     "mr": "रिअल-टाइम मेसेजिंग आल्यावर संभाषणे येथे दिसतील."
   },
-  "JPG, PNG or WebP · Original and uploaded image must be 100–200 KB · Center-cropped square": {
-    "hi": "JPG, PNG या WebP · मूल और अपलोड फ़ोटो 100–200 KB · बीच से वर्गाकार क्रॉप",
-    "mr": "JPG, PNG किंवा WebP · मूळ व अपलोड फोटो 100–200 KB · मध्यभागी चौरस क्रॉप"
+  "JPG, PNG or WebP · Original and uploaded image must be 10–200 KB · Center-cropped square": {
+    "hi": "JPG, PNG या WebP · मूल और अपलोड फ़ोटो 10–200 KB · बीच से वर्गाकार क्रॉप",
+    "mr": "JPG, PNG किंवा WebP · मूळ व अपलोड फोटो 10–200 KB · मध्यभागी चौरस क्रॉप"
   },
   "Freelancers will appear here once they publish their profiles from Dashboard Home.": {
     "hi": "फ्रीलांसर डैशबोर्ड होम से अपनी प्रोफ़ाइल प्रकाशित करेंगे तो यहाँ दिखेंगे।",
@@ -1353,9 +1380,9 @@ Object.assign(UI_TEXT, {
     "hi": "निर्देशिका में दिखाई देते हैं",
     "mr": "निर्देशिकेत दिसणारे"
   },
-  "JPG, PNG or WebP · Original and uploaded image must be 100–200 KB · Choose your crop before uploading": {
-    "hi": "JPG, PNG या WebP · मूल और अपलोड की गई छवि 100–200 KB · अपलोड से पहले क्रॉप चुनें",
-    "mr": "JPG, PNG किंवा WebP · मूळ व अपलोड केलेला फोटो 100–200 KB · अपलोडपूर्वी क्रॉप निवडा"
+  "JPG, PNG or WebP · Original and uploaded image must be 10–200 KB · Choose your crop before uploading": {
+    "hi": "JPG, PNG या WebP · मूल और अपलोड की गई छवि 10–200 KB · अपलोड से पहले क्रॉप चुनें",
+    "mr": "JPG, PNG किंवा WebP · मूळ व अपलोड केलेला फोटो 10–200 KB · अपलोडपूर्वी क्रॉप निवडा"
   },
   "(optional)": {
     "hi": "(वैकल्पिक)",
@@ -1542,9 +1569,9 @@ Object.assign(UI_TEXT, {
     "hi": "3. प्रोफ़ाइल फ़ोटो",
     "mr": "3. प्रोफाइल फोटो"
   },
-  "Members can select and crop a profile photo. FreeLanzo checks that both the original and processed image are between 100–200 KB in the browser before uploading the processed image to Cloudinary. The image URL is stored in Firestore. Removing or replacing a photo does not automatically delete the Cloudinary asset; the project team must manage hosted images separately.": {
-    "hi": "सदस्य प्रोफ़ाइल फ़ोटो चुनकर क्रॉप कर सकते हैं। Cloudinary पर अपलोड से पहले FreeLanzo ब्राउज़र में मूल और तैयार फ़ोटो दोनों का आकार 100–200 KB जाँचता है। तस्वीर का URL Firestore में रखा जाता है। फ़ोटो हटाने या बदलने पर Cloudinary की पुरानी फ़ाइल अपने आप नहीं मिटती; टीम को उसे अलग से संभालना होगा।",
-    "mr": "सदस्य प्रोफाइल फोटो निवडून क्रॉप करू शकतात. Cloudinary वर अपलोड करण्यापूर्वी FreeLanzo ब्राउझरमध्ये मूळ व तयार फोटो दोन्ही 100–200 KB आहेत का हे तपासते. फोटोचा URL Firestore मध्ये साठवला जातो. फोटो काढल्यावर किंवा बदलल्यावर Cloudinary वरील जुनी फाइल आपोआप हटत नाही; टीमने ती वेगळी व्यवस्थापित करावी."
+  "Members can select and crop a profile photo. FreeLanzo checks that both the original and processed image are between 10–200 KB in the browser before uploading the processed image to Cloudinary. The image URL is stored in Firestore. Removing or replacing a photo does not automatically delete the Cloudinary asset; the project team must manage hosted images separately.": {
+    "hi": "सदस्य प्रोफ़ाइल फ़ोटो चुनकर क्रॉप कर सकते हैं। Cloudinary पर अपलोड से पहले FreeLanzo ब्राउज़र में मूल और तैयार फ़ोटो दोनों का आकार 10–200 KB जाँचता है। तस्वीर का URL Firestore में रखा जाता है। फ़ोटो हटाने या बदलने पर Cloudinary की पुरानी फ़ाइल अपने आप नहीं मिटती; टीम को उसे अलग से संभालना होगा।",
+    "mr": "सदस्य प्रोफाइल फोटो निवडून क्रॉप करू शकतात. Cloudinary वर अपलोड करण्यापूर्वी FreeLanzo ब्राउझरमध्ये मूळ व तयार फोटो दोन्ही 10–200 KB आहेत का हे तपासते. फोटोचा URL Firestore मध्ये साठवला जातो. फोटो काढल्यावर किंवा बदलल्यावर Cloudinary वरील जुनी फाइल आपोआप हटत नाही; टीमने ती वेगळी व्यवस्थापित करावी."
   },
   "4. Public freelancer profiles": {
     "hi": "4. सार्वजनिक फ्रीलांसर प्रोफ़ाइल",
@@ -1700,7 +1727,7 @@ function translateAttribute(element, name) {
   outputs[name] = translated;
   if (translated !== current) element.setAttribute(name, translated);
 }
-const skipSelector = 'script, style, noscript, code, [data-no-translate], .freelancer-card, .portfolio-card, .public-project-card, #preview-name, #header-name, #sidebar-name, #welcome-name, #public-name, #public-bio, #public-headline, #public-skills, #settings-email, #account-email, #account-name';
+const skipSelector = 'script, style, noscript, code, [data-no-translate], .freelancer-card, .portfolio-card, .public-project-card, .chat-message-text, .chat-contract, #chat-inbox-list, #chat-person-name, #preview-name, #header-name, #sidebar-name, #welcome-name, #public-name, #public-bio, #public-headline, #public-skills, #settings-email, #account-email, #account-name';
 function translateNode(textNode) {
   const parent = textNode.parentElement;
   if (!parent) return;

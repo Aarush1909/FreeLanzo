@@ -1,9 +1,10 @@
 import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET } from "./cloudinary-config.js";
 
-// 100-200 decimal KB for selected file AND processed upload blob, browser side.
+// Original image up to 10 MB; final cropped upload 10–200 decimal KB, browser side.
 // This does not provide a server-side Cloudinary upload restriction.
 export const AVATAR_MIN_BYTES = 10000;
 export const AVATAR_MAX_BYTES = 200000;
+export const AVATAR_ORIGINAL_MAX_BYTES = 10 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function initials(name) {
@@ -53,8 +54,8 @@ function toBlob(canvas, type, quality) {
 }
 export async function optimizeAvatar(file, crop = null) {
   if (!ACCEPTED_IMAGE_TYPES.has(file.type)) throw new Error("Choose a JPG, PNG, or WebP image.");
-  if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) {
-    throw new Error("Choose an original photo between 100 KB and 200 KB (100,000–200,000 bytes).");
+  if (file.size === 0 || file.size > AVATAR_ORIGINAL_MAX_BYTES) {
+    throw new Error("Choose an original photo up to 10 MB before cropping.");
   }
   const img = await loadImage(file);
   if (!img.naturalWidth || !img.naturalHeight) throw new Error("Invalid image dimensions.");
@@ -63,7 +64,7 @@ export async function optimizeAvatar(file, crop = null) {
   const centerY = Math.max(side / 2, Math.min(img.naturalHeight - side / 2, (Number(crop?.centerY) || 0.5) * img.naturalHeight));
   const choices = [];
   // Keep the center square. Try several resolutions/qualities to find an upload
-  // between 100 KB and 200 KB, without padding fake bytes into the image.
+  // between 10 KB and 200 KB, without padding fake bytes into the image.
   for (const dimension of [400, 600, 800, 1000]) {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = dimension;
@@ -83,7 +84,7 @@ export async function optimizeAvatar(file, crop = null) {
       }
     }
   }
-  throw new Error("This photo cannot be converted into a 100–200 KB square without losing too much detail. Try a different image.");
+  throw new Error("This photo cannot be converted into a 10–200 KB square without losing too much detail. Try a different image.");
 }
 
 export async function uploadAvatar(blob) {
@@ -92,7 +93,7 @@ export async function uploadAvatar(blob) {
     throw new Error("Cloudinary isn't configured. Add your Cloud name and unsigned upload preset in js/cloudinary-config.js.");
   }
   if (!blob || blob.size < AVATAR_MIN_BYTES || blob.size > AVATAR_MAX_BYTES)
-    throw new Error("Upload photo must be between 100 KB and 200 KB.");
+    throw new Error("Upload photo must be between 10 KB and 200 KB.");
   const formData = new FormData();
   formData.append("file", blob, blob.type === "image/webp" ? "freelanzo-avatar.webp" : "freelanzo-avatar.jpg");
   formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
@@ -103,6 +104,6 @@ export async function uploadAvatar(blob) {
   if (!response.ok) throw new Error(result?.error?.message || `Cloudinary upload failed (${response.status}).`);
   if (!isAvatarUrl(result.secure_url)) throw new Error("Cloudinary returned an invalid image URL.");
   if (result.bytes && (result.bytes < AVATAR_MIN_BYTES || result.bytes > AVATAR_MAX_BYTES))
-    throw new Error("Cloudinary changed the uploaded photo outside the 100–200 KB range. Try another picture.");
+    throw new Error("Cloudinary changed the uploaded photo outside the 10–200 KB range. Try another picture.");
   return result.secure_url;
 }

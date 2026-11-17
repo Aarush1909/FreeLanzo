@@ -1,49 +1,51 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#f5f5f2" />
-  <meta name="description" content="View a freelancer's public profile and portfolio on FreeLanzo." />
-  <title>Freelancer Profile — FreeLanzo</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="dashboard.css" />
-  <script type="module" src="public-profile.js"></script>
-</head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<meta content="#f5f5f2" name="theme-color"/>
+<meta content="View a freelancer's public profile and portfolio on FreeLanzo." name="description"/>
+<title>Freelancer Profile — FreeLanzo</title>
+<link href="assets/favicon.svg" rel="icon" type="image/svg+xml"/>
+<link href="styles.css" rel="stylesheet"/>
+<link href="dashboard.css" rel="stylesheet"/>
+<script src="js/public-profile.js" type="module"></script>
+<link href="preferences.css" rel="stylesheet"/><script src="js/ui-preferences.js" type="module"></script></head>
 <body class="workspace-body public-profile-body">
-  <a class="skip-link" href="#public-main">Skip to content</a>
-  <header class="site-header" id="top">
-    <div class="container header-inner">
-      <a class="brand" href="index.html" aria-label="FreeLanzo home"><img src="freelanzo-logo.svg" width="43" height="43" alt="" /><span class="brand-wordmark">FreeLanzo</span></a>
-      <button class="menu-toggle" type="button" id="menu-toggle" aria-label="Open navigation menu" aria-controls="main-nav" aria-expanded="false"><span></span><span></span><span></span></button>
-      <nav class="site-nav" id="main-nav" aria-label="Main navigation">
-        <a href="index.html#home" class="nav-link">Home</a>
-        <a href="index.html#categories" class="nav-link">Categories</a>
-        <a href="index.html#why-freelanzo" class="nav-link">Why FreeLanzo</a>
-        <a href="index.html#about" class="nav-link">About Us</a>
-        <div class="nav-actions"><a href="dashboard.html" class="profile-link" aria-label="Go to your dashboard home"><span class="profile-link-avatar" id="header-avatar">FL</span><span class="profile-link-name" id="header-name">My dashboard</span><span aria-hidden="true">↗</span></a></div>
-      </nav>
-    </div>
-  </header>
-  <main id="public-main" class="public-profile-main">
-    <div class="public-back-row"><a id="back-to-explore" href="dashboard.html" class="dash-text-link">← Back to Explore Freelancers</a><span class="public-readonly-label">PUBLIC PROFILE / VIEW ONLY</span></div>
-    <p id="public-status" class="loading-state" role="status" aria-live="polite">Loading the public profile…</p>
-    <div id="public-content" hidden>
-      <section class="public-hero" aria-labelledby="public-name">
-        <div class="public-hero-avatar" id="public-avatar" aria-hidden="true">FL</div>
-        <div class="public-hero-details">
-          <span class="eyebrow-text">FREELANZO / PUBLIC PORTFOLIO</span>
-          <h1 id="public-name">Freelancer</h1>
-          <p class="public-hero-headline" id="public-headline"></p>
-          <div class="public-meta"><span id="public-category"></span><span id="public-location"></span></div>
-        </div>
-      </section>
-      <section class="public-section" aria-labelledby="public-about-title"><div class="section-divider"><h2 id="public-about-title">About this freelancer</h2><span>ABOUT / CREATOR</span></div><p class="public-bio" id="public-bio"></p><div class="skill-tags" id="public-skills"></div></section>
-      <section class="public-section" aria-labelledby="public-work-title"><div class="section-divider"><h2 id="public-work-title">Portfolio projects</h2><span id="public-project-count">PROJECTS</span></div><div id="public-projects" class="public-project-grid"></div></section>
-      <div class="public-privacy-note"><strong>Privacy by design.</strong> This page contains the freelancer's published work only. Private account details such as email and phone number are not available here. Editing is available only in the freelancer's own dashboard.</div>
-    </div>
-  </main>
-  <footer class="dashboard-footer"><span>© 2026 FreeLanzo. Made for makers.</span><span><a href="terms.html">Terms</a> &nbsp; / &nbsp; <a href="privacy.html">Privacy</a></span></footer>
+<a class="skip-link" href="#public-main">Skip to content</a>
+<header class="site-header" id="top">
+<div class="container header-inner">
+<a aria-label="FreeLanzo home" class="brand" href="index.html"><img alt="" height="43" src="assets/freelanzo-logo.svg" width="43"/><span class="brand-wordmark">FreeLanzo</span></a>
+<button aria-controls="main-nav" aria-expanded="false" aria-label="Open navigation menu" class="menu-toggle" id="menu-toggle" type="button"><span></span><span></span><span></span></button>
+<nav aria-label="Main navigation" class="site-nav" id="main-nav">
+<a class="nav-link" href="index.html#home">Home</a>
+<a class="nav-link" href="index.html#categories">Categories</a>
+<a class="nav-link" href="index.html#why-freelanzo">Why FreeLanzo</a>
+<a class="nav-link" href="index.html#about">About Us</a>
+<div class="nav-actions"><a aria-label="Go to your dashboard home" class="profile-link" href="dashboard.html"><span class="profile-link-avatar" id="header-avatar">FL</span><span class="profile-link-name" id="header-name">My dashboard</span><span aria-hidden="true">↗</span></a></div>
+</nav>
+</div>
+</header>
+<main class="public-profile-main" id="public-main">
+<div class="public-back-row"><a class="dash-text-link" href="dashboard.html" id="back-to-explore">← Back to Explore Freelancers</a><span class="public-readonly-label">PUBLIC PROFILE / VIEW ONLY</span></div>
+<p aria-live="polite" class="loading-state" id="public-status" role="status">Loading the public profile…</p>
+<div hidden="" id="public-content">
+<section aria-labelledby="public-name" class="public-hero">
+<div aria-hidden="true" class="public-hero-avatar" id="public-avatar">FL</div>
+<div class="public-hero-details">
+<span class="eyebrow-text">FREELANZO / PUBLIC PORTFOLIO</span>
+<h1 id="public-name">Freelancer</h1>
+<p class="public-hero-headline" id="public-headline"></p>
+<div class="public-meta"><span id="public-category"></span><span id="public-location"></span></div>
+<a id="public-contact" class="btn btn-primary" hidden href="#">Message freelancer ↗</a>
+</div>
+</section>
+<section aria-labelledby="public-about-title" class="public-section"><div class="section-divider"><h2 id="public-about-title">About this freelancer</h2><span>ABOUT / CREATOR</span></div><p class="public-bio" id="public-bio"></p><div class="skill-tags" id="public-skills"></div></section>
+<section aria-labelledby="public-work-title" class="public-section"><div class="section-divider"><h2 id="public-work-title">Portfolio projects</h2><span id="public-project-count">PROJECTS</span></div><div class="public-project-grid" id="public-projects"></div></section>
+<div class="public-privacy-note"><strong>Privacy by design.</strong> This page contains the freelancer's published work only. Private account details such as email and phone number are not available here. Editing is available only in the freelancer's own dashboard.</div>
+</div>
+</main>
+<footer class="dashboard-footer"><span>© 2026 FreeLanzo. Made for makers.</span><span><a href="terms.html">Terms</a>   /   <a href="privacy.html">Privacy</a></span></footer>
 </body>
 </html>

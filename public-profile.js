@@ -81,6 +81,11 @@ onAuthStateChanged(auth, async viewer => {
       if (["client", "freelancer"].includes(me.role)) {
         $("#back-to-explore").href = `${me.role}-dashboard.html?view=explore`;
       }
+      if (me.role === "client" && profileId !== viewer.uid) {
+        const contact = $("#public-contact");
+        contact.href = `client-dashboard.html?view=messages&with=${encodeURIComponent(profileId)}`;
+        contact.hidden = false;
+      }
     }
     // Strictly public collection; never fetch the freelancer's users/{uid} record.
     const profileDoc = await getDoc(doc(db, "publicFreelancers", profileId));

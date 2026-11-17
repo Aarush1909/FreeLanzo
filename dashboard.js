@@ -9,8 +9,9 @@ import {
   serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
-import { AVATAR_MIN_BYTES, AVATAR_MAX_BYTES, isAvatarUrl, optimizeAvatar, renderAvatar, uploadAvatar } from "./avatar.js";
+import { AVATAR_MIN_BYTES, AVATAR_MAX_BYTES, AVATAR_ORIGINAL_MAX_BYTES, isAvatarUrl, optimizeAvatar, renderAvatar, uploadAvatar } from "./avatar.js";
 import { selectAvatarCrop } from "./avatar-crop.js";
+import { initializeMessaging, activateMessaging, beginChatWithFreelancer } from "./messaging.js";
 const ROLE = document.body.dataset.role;
 const VALID_VIEWS = new Set(ROLE === "freelancer"
   ? ["home", "profile", "portfolios", "explore", "messages", "settings"]
@@ -490,6 +491,10 @@ function renderFreelancers() {
     view.href = `freelancer-profile.html?id=${encodeURIComponent(freelancer.uid)}`;
     foot.append(node("span", "", freelancer.location || "Location not specified"), view);
     if (ROLE === "client" && freelancer.uid !== state.user.uid) {
+      const contact = node("button", "btn-save-freelancer", "✉ Message");
+      contact.type = "button";
+      contact.dataset.chatFreelancer = freelancer.uid;
+      foot.append(contact);
       const save = node("button", "btn-save-freelancer", state.savedIds.has(freelancer.uid) ? "★ Saved" : "☆ Save");
       save.type = "button";
       save.dataset.saveFreelancer = freelancer.uid;
@@ -531,7 +536,7 @@ async function onChoosePhoto(event) {
   if (!file) return;
   const activity = beginActivity(null, localized("Preparing profile photo…", "प्रोफ़ाइल फोटो तैयार हो रही है…", "प्रोफाइल फोटो तयार होत आहे…"));
   try {
-    if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) throw new Error("Choose a photo between 10 KB and 200 KB.");
+    if (file.size === 0 || file.size > AVATAR_ORIGINAL_MAX_BYTES) throw new Error("Choose an original photo up to 10 MB before cropping.");
     $("#photo-status").textContent = "Adjust your crop, then confirm to prepare the photo.";
     const crop = await selectAvatarCrop(file);
     if (!crop) {
@@ -651,6 +656,10 @@ async function loadSavedFreelancers() {
       const view = node("a", "view-public-profile", "View full profile ↗");
       view.href = `freelancer-profile.html?id=${encodeURIComponent(item.uid)}`;
       card.append(view);
+      const contact = node("button", "btn-save-freelancer", "✉ Message");
+      contact.type = "button";
+      contact.dataset.chatFreelancer = item.uid;
+      card.append(contact);
     }
     const remove = node("button", "btn-save-freelancer", "★ Remove from saved");
     remove.type = "button";
@@ -825,6 +834,10 @@ async function openView(view, push = false) {
   if (name === "saved" && ROLE === "client") {
     try { await loadSavedFreelancers(); } catch (err) { notify(readableError(err)); }
   }
+  if (name === "messages") {
+    const withUid = !push ? new URLSearchParams(location.search).get("with") || "" : "";
+    await activateMessaging(withUid);
+  }
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 async function logout(event) {
@@ -873,6 +886,19 @@ function attachEvents() {
     catch (err) { notify(readableError(err)); }
     finally { finishActivity(activity); }
   });
+  document.addEventListener("click", async event => {
+    const contact = event.target.closest('[data-chat-freelancer]');
+    if (contact && ROLE === "client") {
+      if (contact.disabled) return;
+      contact.disabled = true;
+      try {
+        await openView("messages", true);
+        await beginChatWithFreelancer(contact.dataset.chatFreelancer);
+      } catch (error) { notify(error?.message || readableError(error)); }
+      finally { contact.disabled = false; }
+      return;
+    }
+  });
   document.addEventListener("click", event => {
     const link = event.target.closest('a[href^="?view="]');
     if (!link) return;
@@ -913,6 +939,7 @@ onAuthStateChanged(auth, async user => {
     populateProfile();
     if (selectedCategory) $("#explore-category").value = selectedCategory;
     attachEvents();
+    initializeMessaging({ uid: user.uid, role: ROLE, displayName: state.profile.displayName || user.displayName || "Member" });
     if (ROLE === "client") {
       try { await loadSavedIds(); } catch (err) { notify(readableError(err)); }
     }
