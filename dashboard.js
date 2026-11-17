@@ -41,6 +41,100 @@ const incomingCategory = new URLSearchParams(location.search).get("category");
 const selectedCategory = categories.includes(incomingCategory) ? incomingCategory : "";
 let noticeTimer;
 
+// Phase 3.6: show reliable, accessible pending states without inserting HTML
+// from user input or changing the underlying Firestore operations.
+const activeActions = new Map();
+function localized(en, hi = en, mr = en) {
+  const lang = document.documentElement.lang;
+  return lang === "hi" ? hi : lang === "mr" ? mr : en;
+}
+function renderActivity() {
+  const indicator = $("#operation-status");
+  if (!indicator) return;
+  const messages = [...activeActions.values()].map(value => value.message);
+  indicator.hidden = !messages.length;
+  if (messages.length) indicator.querySelector("span").textContent = messages.at(-1);
+}
+function beginActivity(button, message, buttonLabel = "Working…") {
+  const token = Symbol("active-action");
+  if (button) {
+    if (button.dataset.loading === "true") return null;
+    button.dataset.loading = "true";
+    button.dataset.originalLabel = button.textContent;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    const buttonLanguages = {
+      "Saving…": ["सेव हो रहा है…", "सेव्ह होत आहे…"],
+      "Deleting…": ["हटाया जा रहा है…", "हटवले जात आहे…"],
+      "Removing…": ["हटाया जा रहा है…", "हटवले जात आहे…"],
+      "Uploading…": ["अपलोड हो रहा है…", "अपलोड होत आहे…"],
+      "Refreshing…": ["रीफ़्रेश हो रहा है…", "रीफ्रेश होत आहे…"],
+      "Signing out…": ["साइन आउट हो रहा है…", "साइन आउट होत आहे…"]
+    };
+    button.textContent = buttonLanguages[buttonLabel]
+      ? localized(buttonLabel, ...buttonLanguages[buttonLabel]) : buttonLabel;
+  }
+  activeActions.set(token, { button, message });
+  renderActivity();
+  return token;
+}
+function updateActivity(token, message) {
+  const action = activeActions.get(token);
+  if (!action) return;
+  action.message = message;
+  renderActivity();
+}
+function finishActivity(token) {
+  if (!token) return;
+  const action = activeActions.get(token);
+  if (!action) return;
+  const { button } = action;
+  if (button) {
+    button.textContent = button.dataset.originalLabel || button.textContent;
+    delete button.dataset.originalLabel;
+    delete button.dataset.loading;
+    button.removeAttribute("aria-busy");
+    button.disabled = false;
+  }
+  activeActions.delete(token);
+  renderActivity();
+}
+// A browser-only deletion can fail after some Firestore records were removed.
+// Keep a local recovery marker keyed by Firebase UID. It contains no credentials.
+const deletionMarker = uid => `freelanzo_pending_account_deletion_${uid}`;
+function readDeletionMarker(uid) {
+  try {
+    const marker = JSON.parse(localStorage.getItem(deletionMarker(uid)) || "null");
+    return marker?.uid === uid && ["client", "freelancer"].includes(marker.role) ? marker : null;
+  } catch { return null; }
+}
+function writeDeletionMarker(uid, role) {
+  try {
+    localStorage.setItem(deletionMarker(uid), JSON.stringify({uid, role, startedAt: Date.now()}));
+    if (!readDeletionMarker(uid)) throw Error("Cannot verify deletion recovery marker.");
+  } catch {
+    throw new Error("Your browser cannot store recovery information. Enable local storage before deleting your account so interrupted deletion can be resumed.");
+  }
+}
+function clearDeletionMarker(uid) {
+  try { localStorage.removeItem(deletionMarker(uid)); } catch { /* already deleted on Firebase */ }
+}
+function accountUsesGoogle(user = state.user) {
+  return user?.providerData?.some(item => item.providerId === "google.com") === true &&
+    user?.providerData?.every(item => item.providerId !== "password");
+}
+function displayRecoveryPanel() {
+  $("#page-status").hidden = true;
+  $("#workspace").hidden = true;
+  const panel = $("#deletion-recovery");
+  panel.hidden = false;
+  $("#recovery-password-wrap").hidden = accountUsesGoogle();
+  if (panel.dataset.bound !== "true") {
+    panel.dataset.bound = "true";
+    $("#resume-delete").addEventListener("click", () => permanentlyDeleteAccount(true));
+  }
+}
+
 function readableError(error) {
   console.error("FreeLanzo dashboard operation failed:", error);
   if (error?.code === "permission-denied") return "Permission denied. Publish the updated Phase 3.3 Firestore rules in Firebase Console, then try again.";
@@ -185,7 +279,8 @@ async function savePortfolio(event) {
   if (projectUrl && !safeExternalUrl(projectUrl)) { notify("Project links must start with https:// or http://."); return; }
   if (!state.editId && state.portfolios.length >= 90) { notify("For this project, you can display up to 90 portfolio items."); return; }
   const payload = { title, description, category, projectUrl, updatedAt: serverTimestamp() };
-  const button = $("#portfolio-save"); button.disabled = true;
+  const button = $("#portfolio-save");
+  const activity = beginActivity(button, localized("Saving portfolio project…", "पोर्टफोलियो प्रोजेक्ट सेव हो रहा है…", "पोर्टफोलिओ प्रकल्प सेव्ह होत आहे…"), "Saving…");
   try {
     if (state.editId) {
       if (state.published) {
@@ -211,7 +306,7 @@ async function savePortfolio(event) {
     resetPortfolioForm();
     await loadPortfolios();
   } catch (err) { notify(err?.message === "Project not found. Refresh and try again." ? err.message : readableError(err)); }
-  finally { button.disabled = false; }
+  finally { finishActivity(activity); if (!state.editId) setText("portfolio-save", "Add project ↗"); }
 }
 async function handlePortfolioClick(event) {
   const edit = event.target.closest("[data-portfolio-edit]");
@@ -230,6 +325,7 @@ async function handlePortfolioClick(event) {
     form.scrollIntoView({ behavior: "smooth", block: "start" });
     form.elements.title.focus();
   } else if (confirm(`Delete “${found.title}”? This cannot be undone.`)) {
+    const activity = beginActivity(remove, localized("Deleting portfolio project…", "पोर्टफोलियो प्रोजेक्ट हटाया जा रहा है…", "पोर्टफोलिओ प्रकल्प हटवला जात आहे…"), "Deleting…");
     try {
       if (state.published) {
         const batch = writeBatch(db);
@@ -241,6 +337,7 @@ async function handlePortfolioClick(event) {
       notify("Portfolio project deleted.", true);
       await loadPortfolios();
     } catch (err) { notify(readableError(err)); }
+    finally { finishActivity(activity); }
   }
 }
 async function saveProfile(event) {
@@ -269,7 +366,8 @@ async function saveProfile(event) {
     updates.experienceLevel = experienceLevel;
     updates.availability = availability;
   }
-  const button = $("#save-profile"); button.disabled = true;
+  const button = $("#save-profile");
+  const activity = beginActivity(button, localized("Saving your profile…", "आपकी प्रोफ़ाइल सेव हो रही है…", "तुमचे प्रोफाइल सेव्ह होत आहे…"), "Saving…");
   try {
     if (state.published && ROLE === "freelancer") {
       // Keep the private profile and the published profile synchronized atomically.
@@ -285,7 +383,7 @@ async function saveProfile(event) {
     notify("Profile saved successfully.", true);
     if (state.directoryLoaded && ROLE === "freelancer") state.directoryLoaded = false;
   } catch (err) { notify(readableError(err)); }
-  finally { button.disabled = false; }
+  finally { finishActivity(activity); }
 }
 async function getAllPublicProjects() {
   const docs = [];
@@ -323,7 +421,8 @@ async function synchronizePublicProjects() {
 async function saveVisibility() {
   if (ROLE !== "freelancer") return;
   const shouldPublish = $("#settings-published").checked;
-  const button = $("#save-visibility"); button.disabled = true;
+  const button = $("#save-visibility");
+  const activity = beginActivity(button, localized("Updating profile visibility…", "प्रोफ़ाइल दृश्यता अपडेट हो रही है…", "प्रोफाइल दृश्यमानता अपडेट होत आहे…"), "Saving…");
   try {
     if (shouldPublish) {
       await synchronizePublicProjects();
@@ -336,14 +435,17 @@ async function saveVisibility() {
   } catch (err) {
     $("#settings-published").checked = state.published;
     notify(readableError(err));
-  } finally { button.disabled = false; }
+  } finally { finishActivity(activity); }
 }
 async function loadFreelancers() {
+  const activity = beginActivity(null, localized("Loading freelancer directory…", "फ्रीलांसर डायरेक्टरी लोड हो रही है…", "फ्रीलान्सर निर्देशिका लोड होत आहे…"));
+  try {
   const results = await getDocs(query(collection(db, "publicFreelancers"), where("published", "==", true), limit(80)));
   state.freelancers = results.docs.map(item => ({ ...item.data(), uid: item.id }));
   state.directoryLoaded = true;
   setText("stat-freelancers", state.freelancers.length);
   renderFreelancers();
+  } finally { finishActivity(activity); }
 }
 function renderFreelancers() {
   const search = ($("#explore-search")?.value || "").trim().toLowerCase();
@@ -427,6 +529,7 @@ async function onChoosePhoto(event) {
   const file = event.currentTarget.files?.[0];
   clearPhotoSelection();
   if (!file) return;
+  const activity = beginActivity(null, localized("Preparing profile photo…", "प्रोफ़ाइल फोटो तैयार हो रही है…", "प्रोफाइल फोटो तयार होत आहे…"));
   try {
     if (file.size < AVATAR_MIN_BYTES || file.size > AVATAR_MAX_BYTES) throw new Error("Choose a photo between 100 KB and 200 KB.");
     $("#photo-status").textContent = "Adjust your crop, then confirm to prepare the photo.";
@@ -445,12 +548,14 @@ async function onChoosePhoto(event) {
     $("#photo-upload").disabled = false;
     $("#photo-status").textContent = `Ready to upload: ${(blob.size / 1000).toFixed(1)} KB. Click Upload photo to save.`;
   } catch (error) { $("#photo-status").textContent = error.message; clearPhotoSelection(); }
+  finally { finishActivity(activity); }
 }
 async function onUploadPhoto() {
   if (!state.photoBlob) return;
   const upload = $("#photo-upload");
   const remove = $("#photo-remove");
-  upload.disabled = true; remove.disabled = true;
+  const activity = beginActivity(upload, localized("Uploading profile photo to Cloudinary…", "Cloudinary पर प्रोफ़ाइल फोटो अपलोड हो रही है…", "Cloudinary वर प्रोफाइल फोटो अपलोड होत आहे…"), "Uploading…");
+  remove.disabled = true;
   $("#photo-status").textContent = "Uploading your photo…";
   try {
     const url = await uploadAvatar(state.photoBlob);
@@ -460,13 +565,16 @@ async function onUploadPhoto() {
     notify("Profile photo updated.", true);
   } catch (error) {
     $("#photo-status").textContent = error.message || "Could not upload your photo.";
-    upload.disabled = false;
     remove.disabled = !isAvatarUrl(state.profile.avatarURL);
+  } finally {
+    finishActivity(activity);
+    $("#photo-upload").disabled = !state.photoBlob;
   }
 }
 async function onRemovePhoto() {
   if (!state.profile.avatarURL) return;
-  const button = $("#photo-remove"); button.disabled = true;
+  const button = $("#photo-remove");
+  const activity = beginActivity(button, localized("Removing profile photo…", "प्रोफ़ाइल फोटो हट रही है…", "प्रोफाइल फोटो हटवला जात आहे…"), "Removing…");
   try {
     await updateAvatarURL("");
     clearPhotoSelection();
@@ -474,8 +582,7 @@ async function onRemovePhoto() {
     notify("Profile photo removed.", true);
   } catch (error) {
     $("#photo-status").textContent = readableError(error);
-    button.disabled = false;
-  }
+  } finally { finishActivity(activity); button.disabled = !isAvatarUrl(state.profile.avatarURL); }
 }
 // Phase 3.3 — profile completion uses real saved fields, not fabricated scores.
 function updateCompletion() {
@@ -514,6 +621,8 @@ async function loadSavedIds() {
 }
 async function loadSavedFreelancers() {
   if (ROLE !== "client") return;
+  const activity = beginActivity(null, localized("Loading saved freelancers…", "सेव किए फ्रीलांसर लोड हो रहे हैं…", "जतन केलेले फ्रीलान्सर लोड होत आहेत…"));
+  try {
   await loadSavedIds();
   const target = $("#saved-results");
   target.replaceChildren();
@@ -549,13 +658,14 @@ async function loadSavedFreelancers() {
     card.append(remove);
     target.append(card);
   }
+  } finally { finishActivity(activity); }
 }
 async function onSavedAction(event) {
   const button = event.target.closest("[data-save-freelancer]");
   if (!button || ROLE !== "client") return;
   const uid = button.dataset.saveFreelancer;
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(uid)) return;
-  button.disabled = true;
+  const activity = beginActivity(button, localized("Updating saved freelancers…", "सेव किए फ्रीलांसर अपडेट हो रहे हैं…", "जतन केलेले फ्रीलान्सर अपडेट होत आहेत…"), "Saving…");
   try {
     if (state.savedIds.has(uid)) {
       await deleteDoc(savedRef(uid));
@@ -568,63 +678,129 @@ async function onSavedAction(event) {
     }
     renderFreelancers();
     if (!$("[data-view='saved']").hidden) await loadSavedFreelancers();
-  } catch (err) { notify(readableError(err)); button.disabled = false; }
+  } catch (err) { notify(readableError(err)); }
+  finally { finishActivity(activity); }
 }
 
-async function deleteCollectionInPages(ref) {
-  // Delete child documents before deleting the parent. Firestore does not
-  // cascade subcollections when a parent is deleted.
-  while (true) {
+async function deleteCollectionInPages(ref, onProgress = () => {}) {
+  // Deleting a Firestore parent does not delete its subcollections.
+  let deleted = 0;
+  for (;;) {
     const found = await getDocs(query(ref, limit(100)));
-    if (found.empty) break;
+    if (found.empty) return deleted;
     const batch = writeBatch(db);
     found.docs.forEach(item => batch.delete(item.ref));
     await batch.commit();
-    if (found.size < 100) break;
+    deleted += found.size;
+    onProgress(deleted);
+    // Keep querying until empty: don't assume no new docs appeared.
   }
 }
-async function permanentlyDeleteAccount() {
-  const button = $("#delete-account");
-  const status = $("#delete-account-status");
-  if ($("#delete-confirm").value.trim() !== "DELETE") {
+async function permanentlyDeleteAccount(recovery = false) {
+  if (state.deletingAccount) return;
+  const button = $(recovery ? "#resume-delete" : "#delete-account");
+  const status = $(recovery ? "#recovery-status" : "#delete-account-status");
+  const confirmation = $(recovery ? "#recovery-confirm" : "#delete-confirm");
+  const passwordInput = $(recovery ? "#recovery-password" : "#delete-password");
+  if (confirmation.value.trim() !== "DELETE") {
     status.textContent = "Type DELETE exactly before deleting your account.";
+    confirmation.focus();
     return;
   }
   if (!confirm("Permanently delete your FreeLanzo account and associated Firestore data? This cannot be undone.")) return;
-  button.disabled = true;
-  status.textContent = "Verifying your identity…";
+  const activity = beginActivity(button, localized("Verifying your identity for account deletion…", "खाता हटाने के लिए पहचान सत्यापित की जा रही है…", "खाते हटवण्यासाठी ओळख तपासली जात आहे…"), "Deleting…");
+  const progress = (en, hi = en, mr = en) => {
+    status.textContent = localized(en, hi, mr);
+    updateActivity(activity, localized(en, hi, mr));
+  };
+  const uid = state.user.uid;
+  let phase = "authentication";
   try {
-    if (state.profile.provider === "google.com") {
+    progress("Step 1/5 — Confirming your identity…");
+    if (accountUsesGoogle()) {
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({prompt: "select_account"});
+      provider.setCustomParameters({ prompt: "select_account" });
       await reauthenticateWithPopup(state.user, provider);
     } else {
-      const password = $("#delete-password").value;
+      const password = passwordInput.value;
       if (!password) throw new Error("Enter your current password before deleting your account.");
-      await reauthenticateWithCredential(state.user,
-        EmailAuthProvider.credential(state.user.email, password));
+      await reauthenticateWithCredential(state.user, EmailAuthProvider.credential(state.user.email, password));
     }
-    status.textContent = "Deleting stored FreeLanzo data…";
-    await deleteCollectionInPages(portfolioCollection());
-    await deleteCollectionInPages(savedCollection());
-    await deleteCollectionInPages(publicProjectsCollection());
-    const batch = writeBatch(db);
-    if (ROLE === "freelancer") batch.delete(publicDocument());
-    batch.delete(userDocument());
-    await batch.commit();
-    status.textContent = "Removing Firebase sign-in…";
-    // Do not delete Auth identity until Firestore owner-owned data is removed.
+    // Must persist the recovery marker *before* modifying any Firestore data.
+    // It permits recovery on this browser if Auth deletion fails after profile removal.
+    writeDeletionMarker(uid, ROLE);
+    phase = "data";
+    // Prevent concurrent profile edits or portfolio writes while cleanup runs.
+    state.deletingAccount = true;
+    $("#workspace").inert = true;
+    // When a previous attempt already removed the parent user document,
+    // all known child collections were completed first. Trying to delete
+    // public records again would fail rules that require that parent doc.
+    // Finish only the remaining Auth deletion instead.
+    const profileStillExists = (await getDoc(userDocument())).exists();
+    if (!profileStillExists) {
+      if (!readDeletionMarker(uid)) throw new Error("Deletion recovery could not be verified on this device.");
+      phase = "auth";
+      progress("Step 5/5 — Finishing Firebase sign-in deletion…");
+      state.deletingAccount = true;
+      await deleteUser(state.user);
+      clearDeletionMarker(uid);
+      progress("Your FreeLanzo account has been deleted. Redirecting…");
+      location.replace("index.html");
+      return;
+    }
+    if (ROLE === "freelancer") {
+      progress("Step 2/5 — Hiding your public profile…");
+      // Hide immediately so partial failures cannot expose stale profiles.
+      await deleteDoc(publicDocument());
+      progress("Step 3/5 — Removing public portfolio projects…");
+      await deleteCollectionInPages(publicProjectsCollection(), count =>
+        progress(`Step 3/5 — Removed ${count} public portfolio project(s)…`));
+      progress("Step 3/5 — Removing private portfolio projects…");
+      await deleteCollectionInPages(portfolioCollection(), count =>
+        progress(`Step 3/5 — Removed ${count} private portfolio project(s)…`));
+    } else {
+      progress("Step 2/5 — Removing your saved freelancer bookmarks…");
+      await deleteCollectionInPages(savedCollection(), count =>
+        progress(`Step 2/5 — Removed ${count} saved freelancer bookmark(s)…`));
+    }
+    progress("Step 4/5 — Removing your FreeLanzo profile record…");
+    await deleteDoc(userDocument());
+    phase = "auth";
+    progress("Step 5/5 — Removing your Firebase sign-in identity…");
     state.deletingAccount = true;
     await deleteUser(state.user);
+    clearDeletionMarker(uid);
+    progress("Your FreeLanzo account has been deleted. Redirecting…");
     location.replace("index.html");
   } catch (error) {
     state.deletingAccount = false;
+    $("#workspace").inert = false;
     console.error("Account deletion did not finish:", error);
-    status.textContent = error?.message || readableError(error);
-    if (error?.code === "auth/requires-recent-login") {
-      status.textContent = "Authentication expired. Please sign in again and retry account deletion.";
+    const explanation = (error?.code === "auth/requires-recent-login")
+      ? "Your login confirmation expired. Confirm your identity again and retry."
+      : error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential"
+      ? "Incorrect password. Your account has not been deleted; please try again."
+      : error?.code === "auth/popup-closed-by-user"
+      ? "Google verification was canceled. No additional data was deleted."
+      : error?.code === "permission-denied" || error?.code === "unavailable"
+      ? readableError(error)
+      : error?.message || readableError(error);
+    const interrupted = phase !== "authentication";
+    status.textContent = interrupted
+      ? `${explanation} Deletion was interrupted. Some records may already be removed. Keep this browser's data and choose Delete/Resume again to finish. Do not create another account with this email yet.`
+      : explanation;
+    // If the Firestore profile has been removed, the normal dashboard cannot
+    // load on refresh. Reveal the recovery panel for a safe retry.
+    if (interrupted) {
+      try {
+        const snap = await getDoc(userDocument());
+        if (!snap.exists()) displayRecoveryPanel();
+      } catch { /* retry from Settings or reload */ }
     }
-    button.disabled = false;
+  } finally {
+    passwordInput.value = "";
+    finishActivity(activity);
   }
 }
 
@@ -651,13 +827,12 @@ async function openView(view, push = false) {
   }
   window.scrollTo({ top: 0, behavior: "auto" });
 }
-async function logout() {
-  document.querySelectorAll("[data-signout]").forEach(button => button.disabled = true);
+async function logout(event) {
+  const button = event?.currentTarget;
+  const activity = beginActivity(button, localized("Signing out…", "साइन आउट हो रहा है…", "साइन आउट होत आहे…"), "Signing out…");
   try { await signOut(auth); location.replace("index.html"); }
-  catch (err) {
-    notify(readableError(err));
-    document.querySelectorAll("[data-signout]").forEach(button => button.disabled = false);
-  }
+  catch (err) { notify(readableError(err)); }
+  finally { finishActivity(activity); }
 }
 function attachEvents() {
   $("#menu-toggle")?.addEventListener("click", () => {
@@ -690,11 +865,13 @@ function attachEvents() {
     $("#freelancer-results").addEventListener("click", onSavedAction);
     $("#saved-results").addEventListener("click", onSavedAction);
   }
-  $("#delete-account").addEventListener("click", permanentlyDeleteAccount);
+  $("#delete-account").addEventListener("click", () => permanentlyDeleteAccount(false));
   $("#delete-password-wrap").hidden = state.profile.provider === "google.com";
-  $("#explore-refresh").addEventListener("click", async () => {
+  $("#explore-refresh").addEventListener("click", async event => {
+    const activity = beginActivity(event.currentTarget, localized("Refreshing freelancer directory…", "फ्रीलांसर डायरेक्टरी अपडेट हो रही है…", "फ्रीलान्सर निर्देशिका अपडेट होत आहे…"), "Refreshing…");
     try { await loadFreelancers(); notify("Directory refreshed.", true); }
     catch (err) { notify(readableError(err)); }
+    finally { finishActivity(activity); }
   });
   document.addEventListener("click", event => {
     const link = event.target.closest('a[href^="?view="]');
@@ -712,7 +889,14 @@ onAuthStateChanged(auth, async user => {
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
     if (!snap.exists() || !["freelancer", "client"].includes(snap.data().role)) {
-      $("#page-status").textContent = "No valid FreeLanzo profile was found. Contact the project team.";
+      const marker = !snap.exists() ? readDeletionMarker(user.uid) : null;
+      if (marker?.role === ROLE) {
+        state.user = user;
+        state.profile = { provider: accountUsesGoogle(user) ? "google.com" : "password" };
+        displayRecoveryPanel();
+      } else {
+        $("#page-status").textContent = "No valid FreeLanzo profile was found. Contact the project team.";
+      }
       return;
     }
     if (snap.data().role !== ROLE) {
@@ -734,10 +918,13 @@ onAuthStateChanged(auth, async user => {
     }
     $("#page-status").hidden = true;
     $("#workspace").hidden = false;
+    const initialization = beginActivity(null, localized("Loading your FreeLanzo workspace…", "आपका FreeLanzo डैशबोर्ड लोड हो रहा है…", "तुमचा FreeLanzo डॅशबोर्ड लोड होत आहे…"));
+    try {
     if (ROLE === "freelancer") {
       try { await Promise.all([loadVisibility(), loadPortfolios()]); }
       catch (err) { notify(readableError(err)); }
     }
     await openView(getCurrentView());
+    } finally { finishActivity(initialization); }
   } catch (err) { $("#page-status").textContent = readableError(err); }
 }, () => { $("#page-status").textContent = "Unable to check your login. Refresh the page or try again."; });

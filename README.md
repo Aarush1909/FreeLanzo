@@ -1,3 +1,13 @@
+## Phase 3.6 — Freelancer visibility on Dashboard Home
+
+Freelancers now manage their profile **discoverability** from **Dashboard Home**, below the profile completion card and above Quick Access. The toggle and **Save visibility** button have been **moved**, not duplicated. The old visibility panel was removed from Settings; account and security controls remain in Settings. The existing Firestore publishing workflow and permissions are unchanged. English/Hindi/Marathi guidance now points to Dashboard Home.
+
+**Changed files:** `freelancer-dashboard.html`, `dashboard.css`, `js/dashboard.js`, `js/ui-preferences.js`, `README.md`. **New files:** none. **Firestore rules:** no changes needed.
+
+**Test:** Log in as a freelancer, open Dashboard Home, toggle discoverability, click Save visibility, refresh and confirm the status persists. Check that Explore only lists published freelancers. Then confirm the visibility control is absent from Settings and the Client dashboard is unchanged.
+
+---
+
 # FreeLanzo Phase 3.3 — Experience & Privacy (November 15, 2026)
 
 Built from **Phase 3.2 Google Auth + guest-navigation fix**, preserving all earlier functionality. Adds all six discussed enhancements and the two requested changes:
@@ -212,3 +222,13 @@ This update fixes the inconsistent dark mode and partially untranslated content 
 **Verification:** All JS files passed `node --check`, stylesheets parsed, translation mappings for every static page heading were checked, and a headless Chromium static-page render confirmed dark/HI language compatibility on all 10 HTML pages. The homepage was checked in English/Hindi/Marathi at 1280/960/390px; no horizontal overflow was observed, all major sections rendered dark, and category guest notices localized correctly. These are UI tests **without a live Firebase session**; test signed-in pages with your actual Firebase setup after deployment.
 
 **Deployment:** Replace the changed files or extract the full ZIP into your FreeLanzo repository, commit and push to GitHub Pages. Use **Ctrl+Shift+R** to force-refresh cached CSS/JS. Verify English/Hindi/Marathi × light/dark on your live site.
+
+
+## Phase 3.6 — Account deletion reliability and loading states
+
+- Profile, portfolio, visibility, avatar upload/removal, bookmarked freelancer saves, directory refresh, initial workspace loading, and sign-out show accessible progress states. Buttons are disabled while their operations are pending and restored on completion/failure.
+- Account deletion now requires recent Firebase reauthentication, hides the freelancer's public profile before removing project copies, removes subcollection documents in batches, and then removes the account document and Firebase Auth identity.
+- A minimal `localStorage` recovery marker associated with the authenticated Firebase UID allows deletion to be **resumed on the same browser** if the operation fails after the Firestore account document is removed. Keep browser storage and don't sign up again until deletion is complete. If the page is reloaded with the profile already gone, a recovery panel appears.
+- **Important limitations:** A browser-only/static GitHub Pages app **cannot provide guaranteed atomic deletion** across Firestore, Firebase Authentication, and Cloudinary. A second device, revoked permissions, or a network outage can interrupt the process. The recovery marker is device-local. For production-grade guaranteed cleanup (including Cloudinary assets and cross-user references), use a securely authenticated Firebase Cloud Function or other backend with administrative credentials and a durable deletion job. Never put Firebase Admin keys or the Cloudinary API secret in browser JavaScript.
+- Firestore rules and Firebase configuration are unchanged. Test deletion ONLY with disposable test accounts; it is irreversible. Be sure to test both Client and Freelancer flows, including Google and password reauthentication and recovery after intentionally interrupting a request.
+- **Known scope**: The 100–200 KB avatar restriction from the provided Phase 3.6 base is unchanged. This patch does not include the optional 10–200 KB change discussed later.

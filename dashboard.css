@@ -184,3 +184,16 @@
 .home-visibility-panel h2{margin:10px 0 15px}
 .home-visibility-panel .settings-toggle{margin:20px 0}
 .home-visibility-panel .btn{max-width:100%}
+
+/* Phase 3.6: accessible action progress and interrupted-deletion recovery. */
+.operation-status{display:flex;align-items:center;gap:12px;margin:0 0 20px;padding:12px 15px;border:1px solid var(--line,#c8cbc5);background:var(--surface,#fff);color:var(--text,#151615);font:700 12px/1.6 'Courier New',monospace}
+.operation-status[hidden],.deletion-recovery[hidden]{display:none!important}
+.operation-status::before,.workspace-body button[data-loading="true"]::before{content:"";display:inline-block;width:15px;height:15px;flex:none;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:fl-spin .75s linear infinite;vertical-align:middle}
+.workspace-body button[data-loading="true"]{opacity:.8;cursor:progress}
+.workspace-body button[data-loading="true"]::before{width:12px;height:12px;margin-right:8px}
+.deletion-recovery{width:min(600px,calc(100% - 40px));margin:50px auto;padding:30px;background:var(--surface,#fff);color:var(--text,#151615)}
+.deletion-recovery h1{font-size:clamp(24px,4vw,34px);margin:9px 0}
+.deletion-recovery p{line-height:1.6}
+.deletion-recovery .dash-field{margin:18px 0}
+@keyframes fl-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.operation-status::before,.workspace-body button[data-loading="true"]::before{animation-duration:3s}}
