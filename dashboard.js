@@ -746,6 +746,34 @@ async function permanentlyDeleteAccount(recovery = false) {
     // all known child collections were completed first. Trying to delete
     // public records again would fail rules that require that parent doc.
     // Finish only the remaining Auth deletion instead.
+    // Shared records are intentionally retained for the other participant.
+    // Close each of this user's conversations BEFORE removing the user profile,
+    // so messages/offers become read-only and their inbox name is anonymized.
+    progress("Closing shared conversations and removing your displayed name…");
+    let cursor = null;
+    let closed = 0;
+    for (;;) {
+      const parts = [where("memberUids", "array-contains", uid), limit(70)];
+      if (cursor) parts.push(startAfter(cursor));
+      const page = await getDocs(query(collection(db, "conversations"), ...parts));
+      if (page.empty) break;
+      for (const conversationSnap of page.docs) {
+        const ownField = ROLE === "client" ? "clientActive" : "freelancerActive";
+        const ownName = ROLE === "client" ? "clientName" : "freelancerName";
+        if (conversationSnap.data()[ownField] !== false) {
+          await updateDoc(conversationSnap.ref, {
+            [ownField]: false, [ownName]: "Deleted account",
+            lastMessage: "Conversation closed — account deleted"
+          });
+          closed++;
+        }
+      }
+      cursor = page.docs.at(-1);
+      progress(`Closed ${closed} shared conversation(s)…`);
+      if (page.size < 70) break;
+    }
+    progress("Removing private blocked-user records…");
+    await deleteCollectionInPages(collection(db, "users", uid, "blocked"));
     const profileStillExists = (await getDoc(userDocument())).exists();
     if (!profileStillExists) {
       if (!readDeletionMarker(uid)) throw new Error("Deletion recovery could not be verified on this device.");
@@ -924,6 +952,9 @@ onAuthStateChanged(auth, async user => {
         $("#page-status").textContent = "No valid FreeLanzo profile was found. Contact the project team.";
       }
       return;
+    }
+    if (snap.data().verificationRequired === true && !user.emailVerified) {
+      location.replace("verify-email.html"); return;
     }
     if (snap.data().role !== ROLE) {
       const target = new URL(`${snap.data().role}-dashboard.html`, location.href);

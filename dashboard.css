@@ -291,3 +291,45 @@
 .chat-offer-state.status-cancelled{color:var(--muted,#666)}
 .chat-offer-state.status-pending{color:#ad7514}
 @media(max-width:520px){.chat-contract-form{gap:12px}.chat-contract-panel{margin:0 10px 14px;padding:13px}.chat-contract-description{padding:10px 0}}
+
+/* Phase 4.2: conversation actions, moderation, pagination, print and accessibility */
+.chat-room-header{flex-wrap:wrap}
+.chat-moderation-actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.chat-moderation-actions .btn{font-size:11px;padding:9px 12px;min-height:40px}
+.chat-history-bar{padding:8px 15px;display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border,#ccc)}
+.chat-history-bar .btn{font-size:11px;min-height:38px}
+.chat-history-hint{color:var(--muted,#555);font-size:11px}
+.chat-date-separator{align-self:center;flex:none;padding:5px 12px;background:var(--soft,#eee);color:var(--muted,#555);border:1px solid var(--border,#ccc);border-radius:30px;font:700 10px 'Courier New',monospace;text-align:center;max-width:100%}
+.chat-compose-actions{flex-wrap:wrap}
+.chat-compose-actions .btn{min-height:43px}
+.chat-print-button{display:inline-block;margin-top:12px;font-size:11px;min-height:37px}
+.chat-privacy-note{padding:0 18px 12px;line-height:1.5}
+.chat-shell :is(button,a,input,textarea,select):focus-visible{outline:3px solid var(--red,#e83f35);outline-offset:3px}
+.chat-shell button:disabled{cursor:not-allowed;opacity:.6}
+.chat-inbox-item:focus-visible{outline:2px solid var(--red,#e83f35);outline-offset:-3px}
+.chat-message-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.print-contract-sheet{display:none}
+.print-contract-row{display:grid;grid-template-columns:170px 1fr;gap:16px;border-bottom:1px solid #ddd;padding:9px 0;font:13px Arial,sans-serif}
+.print-contract-row p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.print-contract-sheet>img{max-width:250px;max-height:120px;object-fit:contain}
+@media(max-width:760px){
+ .chat-room-header{padding:14px;gap:9px}
+ .chat-moderation-actions{width:100%;justify-content:flex-start}
+ .chat-history-bar{padding:9px}
+ .chat-compose-actions{gap:8px}
+ .chat-compose-actions .btn{flex:1 1 auto}
+}
+@media(max-width:390px){.chat-room-header .btn{white-space:normal}.chat-moderation-actions .btn{flex:1}.chat-contract-row{flex-wrap:wrap}.chat-contract-row strong{max-width:100%;text-align:left}}
+@media print{
+ @page{size:A4;margin:17mm}
+ body:has(#freelanzo-print-sheet) > :not(#freelanzo-print-sheet){display:none!important}
+ body:has(#freelanzo-print-sheet){background:white!important;color:black!important}
+ .print-contract-sheet{display:block!important;position:static;color:#111;background:white;padding:0;max-width:100%;font-family:Arial,sans-serif}
+ .print-contract-sheet h1{font-size:24px;line-height:1.3;border-bottom:2px solid #111;padding-bottom:12px}
+ .print-contract-sheet h2{font-size:15px}
+ .print-contract-sheet>p{font-size:11px;line-height:1.5}
+ .print-contract-row{break-inside:avoid;grid-template-columns:150px 1fr}
+}
+
+.chat-shell{--muted:#555950}
+html[data-theme="dark"] .chat-shell{--muted:#bcbfb6}

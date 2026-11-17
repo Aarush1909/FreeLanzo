@@ -28,6 +28,9 @@ onAuthStateChanged(auth, async user => {
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
     const role = snap.exists() ? snap.data().role : null;
+    if (snap.exists() && snap.data().verificationRequired === true && !user.emailVerified) {
+      location.replace("verify-email.html"); return;
+    }
     if (role === "freelancer" || role === "client") {
       location.replace(dashboardDestination(role));
     } else status.textContent = "No valid account type found. Please contact the FreeLanzo team.";

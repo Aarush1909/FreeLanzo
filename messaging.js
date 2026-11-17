@@ -3,7 +3,7 @@
  * The optional small client signature image is stored in its private offer record.
  */
 import {
-  collection, doc, getDoc, increment, limit, onSnapshot, orderBy, query,
+  collection, deleteDoc, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, startAfter,
   runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { db } from "./firebase.js";
@@ -44,6 +44,66 @@ let active = false;
 let busy = false;
 let signatureFile = null;
 let liveOfferUrl = null;
+let blockedByMe = false;
+let pendingSend = null;
+let oldestPageCursor = null;
+let moreMessages = false;
+let olderMessages = new Map();
+let loadingOlder = false;
+const PAGE_SIZE = 100;
+const MSG_KINDS = new Set(["text", "contract"]);
+function otherUid(convo = activeConversation) {
+  return !convo ? "" : (convo.clientUid === me?.uid ? convo.freelancerUid : convo.clientUid);
+}
+function conversationClosed(convo = activeConversation) {
+  return Boolean(convo && (convo.clientActive === false || convo.freelancerActive === false));
+}
+function cannotSend() { return !activeConversation || conversationClosed() || blockedByMe; }
+function availabilityNotice() {
+  return conversationClosed() ? "This conversation is closed because an account was deleted." :
+    blockedByMe ? "You blocked this user. Unblock them to send messages or offers." : "";
+}
+function syncChatControls() {
+  const disabled = cannotSend();
+  const send = $("#chat-send");
+  if (send) send.disabled = busy || disabled;
+  const offer = $("#chat-offer-button");
+  if (offer) offer.disabled = busy || disabled || me?.role !== "client";
+  const block = $("#chat-block");
+  if (block) { block.disabled = !activeConversation || conversationClosed(); block.textContent = blockedByMe ? ui("Unblock user") : ui("Block user"); }
+  const composer = $("#chat-text");
+  if (composer) composer.disabled = disabled;
+  const contractSend = $("#contract-send");
+  if (contractSend) contractSend.disabled = busy || disabled || me?.role !== "client";
+  const retry = $("#chat-retry");
+  if (retry) retry.hidden = !pendingSend || pendingSend.conversationId !== activeConversation?.id || disabled;
+  if (disabled && activeConversation) status(availabilityNotice(), true);
+}
+async function refreshMyBlock() {
+  const selectedId = activeConversation?.id;
+  blockedByMe = false;
+  syncChatControls();
+  if (!selectedId) return;
+  try {
+    const snap = await getDoc(doc(db, "users", me.uid, "blocked", otherUid()));
+    if (activeConversation?.id === selectedId) { blockedByMe = snap.exists(); syncChatControls(); }
+  } catch (error) { if (activeConversation?.id === selectedId) status(textError(error), true); }
+}
+async function toggleBlock() {
+  if (!activeConversation || conversationClosed()) return;
+  const target = otherUid();
+  if (!window.confirm(blockedByMe ? "Unblock this account and allow new chat messages?" : "Block this account? Neither person will be able to send messages or work offers while blocked.")) return;
+  const control = $("#chat-block"); control.disabled = true;
+  try {
+    const ref = doc(db, "users", me.uid, "blocked", target);
+    if (blockedByMe) await deleteDoc(ref);
+    else await setDoc(ref, { blockedUid: target, createdAt: serverTimestamp() });
+    blockedByMe = !blockedByMe;
+    status(blockedByMe ? "Account blocked. New messages and work offers are disabled." : "Account unblocked.");
+  } catch (error) { status(textError(error), true); }
+  finally { syncChatControls(); }
+}
+
 const markingRead = new Set();
 const actingOnOffer = new Set();
 const PAYMENT_LABELS = {
@@ -93,6 +153,7 @@ function chatBusy(value, label = "Sending…") {
   if (btn) btn.textContent = value ? label : "Send ↗";
   const contractBtn = $("#contract-send");
   if (contractBtn) contractBtn.textContent = value ? label : "Send work offer ↗";
+  syncChatControls();
 }
 function showConversationHeader() {
   const title = $("#chat-person-name");
@@ -110,6 +171,7 @@ function showConversationHeader() {
   $("#chat-content").hidden = false;
   $("#chat-offer-button").hidden = me.role !== "client";
   $("#chat-offer-button").disabled = busy || me.role !== "client";
+  syncChatControls();
 }
 function renderInbox() {
   const holder = $("#chat-inbox-list");
@@ -143,6 +205,33 @@ function renderInbox() {
     btn.addEventListener("click", () => selectConversation(convo));
     holder.append(btn);
   }
+}
+
+function printOffer(offer) {
+  if (!offer) return;
+  const old = document.getElementById("freelanzo-print-sheet"); old?.remove();
+  const sheet = el("section", "print-contract-sheet"); sheet.id = "freelanzo-print-sheet";
+  sheet.append(el("h1", "", "FreeLanzo — Recorded Work Offer"));
+  sheet.append(el("p", "", "This printout records user-submitted terms and status; it is not a verified electronic signature or proof of payment."));
+  for (const [label, value] of [
+    ["Client / company", offer.companyName], ["Payment amount", formatMoney(offer.amount, offer.currency)],
+    ["Working days", (offer.days || []).join(", ")], ["Working hours", `${offer.startTime}–${offer.endTime} (${offer.timezone})`],
+    ["Work description", offer.workDescription], ["Deadline", offer.deadline],
+    ["Payment terms", PAYMENT_LABELS[offer.paymentTerms] || offer.paymentTerms],
+    ["Payment schedule", offer.paymentDetails || "—"], ["Status", offer.status],
+    ["Created", formatTime(offer.createdAt)], ["Responded", offer.respondedAt ? formatTime(offer.respondedAt) : "Pending"]
+  ]) {
+    const row = el("div", "print-contract-row");
+    row.append(el("strong", "", label), el("p", "", String(value || "—"))); sheet.append(row);
+  }
+  if (typeof offer.signatureData === "string" && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(offer.signatureData)) {
+    const label = el("h2", "", "Client-provided signature image");
+    const img = el("img"); img.src = offer.signatureData; img.alt = "Unverified client-provided signature image";
+    sheet.append(label, img);
+  }
+  document.body.append(sheet);
+  window.addEventListener("afterprint", () => sheet.remove(), { once: true });
+  window.print();
 }
 
 function contractCard(offer) {
@@ -183,10 +272,14 @@ function contractCard(offer) {
   card.append(signature);
   const labels = { pending: "Pending freelancer response", accepted: "Accepted", declined: "Declined", cancelled: "Cancelled by client" };
   card.append(el("p", `chat-offer-state status-${offer.status}`, `${ui("Status")}: ${ui(labels[offer.status] || offer.status)}`));
+  const printButton = el("button", "btn btn-outline chat-print-button", ui("Print offer"));
+  printButton.type = "button";
+  printButton.addEventListener("click", () => printOffer(offer));
+  card.append(printButton);
   if (offer.respondedAt) {
     card.append(el("small", "", `${ui(offer.status === "cancelled" ? "Cancelled" : "Responded")} ${formatTime(offer.respondedAt)}`));
   }
-  if (offer.status === "pending" && me.role === "freelancer" && offer.freelancerUid === me.uid) {
+  if (offer.status === "pending" && !conversationClosed() && !blockedByMe && me.role === "freelancer" && offer.freelancerUid === me.uid) {
     const actions = el("div", "chat-offer-actions");
     for (const [decision, label] of [["accepted", "Accept offer"], ["declined", "Decline offer"]]) {
       const btn = el("button", decision === "accepted" ? "btn btn-primary" : "btn btn-outline", ui(label));
@@ -196,7 +289,7 @@ function contractCard(offer) {
     }
     card.append(actions);
   }
-  if (offer.status === "pending" && me.role === "client" && offer.clientUid === me.uid) {
+  if (offer.status === "pending" && !conversationClosed() && !blockedByMe && me.role === "client" && offer.clientUid === me.uid) {
     const actions = el("div", "chat-offer-actions");
     const btn = el("button", "btn btn-outline", ui("Cancel pending offer"));
     btn.type = "button";
@@ -207,7 +300,7 @@ function contractCard(offer) {
   return card;
 }
 async function updateOfferStatus(offerId, decision, button) {
-  if (busy || !activeConversation || actingOnOffer.has(offerId)) return;
+  if (busy || cannotSend() || actingOnOffer.has(offerId)) return;
   const allowed = me.role === "freelancer" ? ["accepted", "declined"] : ["cancelled"];
   if (!allowed.includes(decision)) return;
   const action = decision === "accepted" ? "accept" : decision === "declined" ? "decline" : "cancel";
@@ -242,7 +335,24 @@ function renderMessages() {
     list.append(el("p", "chat-no-messages", "No messages yet. Say hello to start the conversation."));
     return;
   }
-  for (const message of [...messages].reverse()) {
+  const allMessages = new Map([...olderMessages, ...messages.map(m => [m.id, m])]);
+  const orderedMessages = [...allMessages.values()].sort((a, b) =>
+    (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0) || a.id.localeCompare(b.id));
+  let previousDay = "";
+  for (const message of orderedMessages) {
+    const date = message.createdAt?.toDate?.();
+    if (date) {
+      const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      if (dayKey !== previousDay) {
+        const today = new Date();
+        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+        const sameDay = d => d && d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate();
+        const label = sameDay(today) ? ui("Today") : sameDay(yesterday) ? ui("Yesterday") :
+          new Intl.DateTimeFormat(({ hi: "hi-IN", mr: "mr-IN" })[document.documentElement.lang] || "en-IN", { dateStyle: "medium" }).format(date);
+        const separator = el("div", "chat-date-separator", label); separator.setAttribute("role", "separator");
+        list.append(separator); previousDay = dayKey;
+      }
+    }
     const item = el("article", message.senderUid === me.uid ? "chat-message is-mine" : "chat-message is-theirs");
     item.append(el("span", "chat-message-author", ui(message.senderUid === me.uid ? "You" : "Other participant")));
     if (message.kind === "contract") {
@@ -260,18 +370,23 @@ function renderMessages() {
     item.append(timeTag);
     list.append(item);
   }
-  list.scrollTop = list.scrollHeight;
+  // Preserve position when the user explicitly loads older messages.
+  if (!loadingOlder) list.scrollTop = list.scrollHeight;
 }
 function detachConversation() {
   messagesUnsub?.(); contractsUnsub?.();
   messagesUnsub = null; contractsUnsub = null;
-  messages = []; contracts = new Map();
+  messages = []; contracts = new Map(); olderMessages = new Map();
+  oldestPageCursor = null; moreMessages = false; loadingOlder = false;
+  const older = $("#chat-load-older"); if (older) older.hidden = true;
 }
 function selectConversation(convo) {
   if (!convo || (convo.id === activeConversation?.id && messagesUnsub)) return;
   detachConversation();
   activeConversation = convo;
+  blockedByMe = false; pendingSend = null; 
   showConversationHeader();
+  refreshMyBlock();
   renderInbox();
   $("#chat-message-list").replaceChildren(el("p", "chat-no-messages", "Loading messages…"));
   messagesUnsub = onSnapshot(
@@ -279,6 +394,9 @@ function selectConversation(convo) {
     snapshot => {
       if (activeConversation?.id !== convo.id) return;
       messages = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+      if (!oldestPageCursor) oldestPageCursor = snapshot.docs.at(-1) || null;
+      if (!olderMessages.size) moreMessages = snapshot.docs.length === PAGE_SIZE;
+      $("#chat-load-older").hidden = !moreMessages;
       renderMessages();
       markConversationRead(activeConversation);
     },
@@ -288,7 +406,9 @@ function selectConversation(convo) {
     query(collection(db, "conversations", convo.id, "contracts"), limit(100)),
     snapshot => {
       if (activeConversation?.id !== convo.id) return;
-      contracts = new Map(snapshot.docs.map(item => [item.id, { id: item.id, ...item.data() }]));
+      const latest = new Map(snapshot.docs.map(item => [item.id, { id: item.id, ...item.data() }]));
+      // Keep offers fetched for paginated history; live records take precedence.
+      contracts = new Map([...contracts, ...latest]);
       renderMessages();
     },
     error => status(textError(error), true)
@@ -300,11 +420,47 @@ function selectConversation(convo) {
   status("Messages are private to the two registered participants.");
 }
 
-async function sendMessage(text, conversationId) {
+async function loadOlderMessages() {
+  if (loadingOlder || !moreMessages || !oldestPageCursor || !activeConversation) return;
+  const id = activeConversation.id;
+  const control = $("#chat-load-older"); control.disabled = true;
+  const list = $("#chat-message-list");
+  const height = list.scrollHeight, top = list.scrollTop;
+  loadingOlder = true; $("#chat-history-hint").textContent = ui("Loading earlier messages…");
+  try {
+    const snapshot = await getDocs(query(collection(db, "conversations", id, "messages"),
+      orderBy("createdAt", "desc"), startAfter(oldestPageCursor), limit(PAGE_SIZE)));
+    if (activeConversation?.id !== id) return;
+    for (const item of snapshot.docs) olderMessages.set(item.id, { id: item.id, ...item.data() });
+    if (snapshot.docs.length) oldestPageCursor = snapshot.docs.at(-1);
+    moreMessages = snapshot.docs.length === PAGE_SIZE;
+    // Contracts outside the live 100-offer window are fetched individually by authorized members.
+    const missing = snapshot.docs.map(item => item.data()).filter(m => m.kind === "contract" && m.contractId && !contracts.has(m.contractId));
+    for (const m of missing) {
+      const offer = await getDoc(doc(db, "conversations", id, "contracts", m.contractId));
+      if (offer.exists()) contracts.set(offer.id, { id: offer.id, ...offer.data() });
+    }
+    renderMessages();
+    list.scrollTop = list.scrollHeight - height + top;
+    $("#chat-history-hint").textContent = snapshot.empty ? ui("You reached the beginning of this conversation.") : ui(`${snapshot.size} earlier messages loaded.`);
+  } catch (error) { status(textError(error), true); }
+  finally {
+    loadingOlder = false; control.disabled = false;
+    control.hidden = !moreMessages;
+  }
+}
+
+async function sendMessage(text, conversationId, messageId) {
   const trimmedText = String(text || "").trim();
   if (!trimmedText || trimmedText.length > 2000) throw new Error("Enter a text message of at most 2,000 characters.");
   if (activeConversation?.id !== conversationId) throw new Error("Conversation changed before the message was sent.");
-  const msgRef = doc(collection(db, "conversations", conversationId, "messages"));
+  const msgRef = doc(db, "conversations", conversationId, "messages", messageId);
+  // A retry uses the SAME message ID, preventing duplicate messages after an uncertain acknowledgement.
+  const prior = await getDoc(msgRef);
+  if (prior.exists()) {
+    if (prior.data().senderUid === me.uid && prior.data().text === trimmedText) return;
+    throw new Error("The message ID is already used. Please compose a new message.");
+  }
   const batch = writeBatch(db);
   batch.set(msgRef, {
     senderUid: me.uid, kind: "text", text: trimmedText,
@@ -317,32 +473,37 @@ async function sendMessage(text, conversationId) {
     updatedAt: serverTimestamp(),
     [me.role === "client" ? "freelancerUnread" : "clientUnread"]: increment(1)
   });
-  await batch.commit();
+  try { await batch.commit(); }
+  catch (error) {
+    // The server may have committed before the client lost its acknowledgement.
+    try {
+      const confirmed = await getDoc(msgRef);
+      if (confirmed.exists() && confirmed.data().senderUid === me.uid && confirmed.data().text === trimmedText) return;
+    } catch { /* Keep pending ID for safe retry */ }
+    throw error;
+  }
 }
 
-async function onSend(event) {
-  event.preventDefault();
-  if (!activeConversation || busy) return;
-  const text = $("#chat-text").value.trim();
-  if (!text) {
-    status("Write a message before sending.", true);
-    return;
-  }
+async function onSend(event, retry = false) {
+  event?.preventDefault?.();
+  if (cannotSend() || busy) return;
+  const text = retry ? pendingSend?.text : $("#chat-text").value.trim();
+  if (!text || text.length > 2000) return status("Enter a text message of at most 2,000 characters.", true);
   const conversationId = activeConversation.id;
-  chatBusy(true);
+  if (!retry || !pendingSend || pendingSend.text !== text || pendingSend.conversationId !== conversationId) {
+    pendingSend = { conversationId, text, messageId: doc(collection(db, "conversations", conversationId, "messages")).id };
+  }
+  chatBusy(true, "Sending…"); status("Sending message…");
   try {
-    await sendMessage(text, conversationId);
-    // A user can switch conversations while a request is in flight.
-    // Never clear a draft they typed in the newly selected chat.
+    await sendMessage(pendingSend.text, conversationId, pendingSend.messageId);
     if (activeConversation?.id === conversationId) {
-      $("#chat-text").value = "";
+      if ($("#chat-text").value.trim() === text) $("#chat-text").value = "";
       status("Message sent.");
+      pendingSend = null;
     }
   } catch (error) {
-    status(textError(error), true);
-  } finally {
-    chatBusy(false);
-  }
+    status(`Message not confirmed: ${textError(error)}. Use Retry if your connection failed.`, true);
+  } finally { chatBusy(false); syncChatControls(); }
 }
 
 function closeContractForm() {
@@ -365,7 +526,7 @@ function dataUrlFromFile(file) {
 }
 async function onSendContract(event) {
   event.preventDefault();
-  if (busy || !activeConversation || me.role !== "client") return;
+  if (busy || cannotSend() || me.role !== "client") return;
   const form = $("#contract-form");
   $("#contract-deadline").min = todayLocal();
   if (!form.reportValidity()) return;
@@ -429,6 +590,9 @@ export function initializeMessaging({ uid, role, displayName }) {
   active = true;
   me = { uid, role, displayName: String(displayName || "Member").slice(0, 80) };
   $("#chat-compose")?.addEventListener("submit", onSend);
+  $("#chat-retry")?.addEventListener("click", () => onSend(null, true));
+  $("#chat-load-older")?.addEventListener("click", loadOlderMessages);
+  $("#chat-block")?.addEventListener("click", toggleBlock);
   const deadlineInput = $("#contract-deadline");
   if (deadlineInput) deadlineInput.min = todayLocal();
   $("#contract-payment-terms")?.addEventListener("change", () => {
@@ -442,6 +606,7 @@ export function initializeMessaging({ uid, role, displayName }) {
   $("#contract-form")?.addEventListener("submit", onSendContract);
   $("#chat-offer-button")?.addEventListener("click", () => {
     const panel = $("#contract-panel");
+    if (cannotSend()) return status(availabilityNotice(), true);
     panel.hidden = !panel.hidden;
     if (!panel.hidden) $("#contract-company").focus();
   });
@@ -497,6 +662,8 @@ export function initializeMessaging({ uid, role, displayName }) {
 export async function beginChatWithFreelancer(freelancerUid) {
   if (me?.role !== "client") throw new Error("Only clients can start new freelancer conversations.");
   if (!validUid(freelancerUid) || freelancerUid === me.uid) throw new Error("Invalid freelancer account.");
+  const myBlock = await getDoc(doc(db, "users", me.uid, "blocked", freelancerUid));
+  if (myBlock.exists()) throw new Error("Unblock this freelancer before starting a conversation.");
   const publicSnap = await getDoc(doc(db, "publicFreelancers", freelancerUid));
   if (!publicSnap.exists() || publicSnap.data().published !== true) throw new Error("This freelancer is no longer available in Explore.");
   const conversationId = `${me.uid}_${freelancerUid}`;
@@ -511,7 +678,7 @@ export async function beginChatWithFreelancer(freelancerUid) {
         freelancerName: String(publicSnap.data().displayName || "Freelancer").slice(0, 80),
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         lastMessage: "", lastMessageId: "", lastSenderUid: "",
-        clientUnread: 0, freelancerUnread: 0
+        clientUnread: 0, freelancerUnread: 0, clientActive: true, freelancerActive: true
       });
     } catch (error) {
       // A parallel tab may have created the same deterministic conversation.
@@ -524,6 +691,7 @@ export async function beginChatWithFreelancer(freelancerUid) {
   if (!data || data.clientUid !== me.uid || data.freelancerUid !== freelancerUid) {
     throw new Error("Conversation participant validation failed.");
   }
+  if (data.clientActive === false || data.freelancerActive === false) throw new Error("This conversation is closed.");
   selectConversation({ id: snapshot.id, ...data });
   return snapshot.id;
 }
