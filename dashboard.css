@@ -335,7 +335,13 @@
 html[data-theme="dark"] .chat-shell{--muted:#bcbfb6}
 
 /* Phase 4.3 mobile UX polish: accessible chat options, mobile inbox/room and sign-out. */
-.dash-mobile-account-actions{display:none}
+/* The account action belongs to the hamburger (three-line) navigation on mobile/tablet. */
+.workspace-body .header-menu-signout{display:none}
+@media(max-width:1100px){
+ .workspace-body .header-menu-signout{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:48px;margin-top:12px;padding:14px 0 5px;border:0;border-top:1px solid var(--border,#bcbdb5);background:transparent;color:inherit;text-align:left;font:700 12px/1.4 'Courier New',monospace;letter-spacing:.055em;text-transform:uppercase;cursor:pointer}
+ .workspace-body .header-menu-signout:hover{color:var(--red,#e83f35)}
+ .workspace-body .header-menu-signout:focus-visible{outline:3px solid var(--red,#e83f35);outline-offset:3px}
+}
 .chat-room-title{min-width:0;flex:1;display:flex;align-items:center;gap:12px}
 .chat-room-title > div{min-width:0}
 .chat-room-title h2{overflow-wrap:anywhere}
@@ -350,12 +356,6 @@ html[data-theme="dark"] .chat-shell{--muted:#bcbfb6}
 .chat-actions-item:hover:not(:disabled),.chat-actions-item:focus-visible{background:var(--soft,#eee)}
 .chat-actions-item + .chat-actions-item{border-top:1px solid var(--border,#ddd)}
 .chat-actions-danger:hover:not(:disabled){color:var(--red,#c52e29)}
-@media (max-width: 940px) {
- .dash-mobile-account-actions{display:flex;justify-content:flex-end;padding:0 22px 14px;background:var(--soft,#ededE8)}
- .dash-mobile-signout{display:inline-flex;align-items:center;justify-content:space-between;gap:18px;min-height:44px;padding:10px 14px;background:var(--white,#fff);border:1px solid var(--border,#ccc);color:var(--ink,#171717);font:700 12px 'Courier New',monospace;cursor:pointer}
- .dash-mobile-signout:hover{border-color:var(--red,#e83f35);color:var(--red,#e83f35)}
- .dash-mobile-signout:focus-visible{outline:3px solid var(--red,#e83f35);outline-offset:3px}
-}
 @media (max-width: 700px) {
  .chat-shell{display:block;min-height:360px}
  .chat-shell:not(.is-room-open) .chat-room{display:none}
@@ -382,6 +382,5 @@ html[data-theme="dark"] .chat-shell{--muted:#bcbfb6}
  .chat-room-title{flex-direction:column;align-items:flex-start;gap:5px}
  .chat-room-header{align-items:flex-start;flex-direction:row}
  .chat-back-to-inbox{min-height:35px;padding:5px 8px}
- .dash-mobile-account-actions{padding:0 18px 12px}
  .chat-actions-popover{min-width:175px}
 }
