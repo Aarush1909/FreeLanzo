@@ -1,304 +1,458 @@
-# FreeLanzo Phase 4.1 — Chat & Work Offer Refinements
+# FreeLanzo
 
-Phase 4.1 adds work descriptions, deadlines, payment terms, offer status/cancellation, unread inbox counts, message timestamps, and confirmation before freelancer accept/decline. The approved text-only messaging and 30 KB signature limit remain unchanged. Final cropped profile photos remain **10–200 KB**.
+**A freelance portfolio and collaboration platform for Clients and Freelancers.**
 
-See **PHASE4_SETUP.md** for required Firestore rule deployment and two-account tests. Publish the matching `firestore.rules` and `js/messaging.js` together; do not deploy the new rule set with the old chat script. Existing accepted/declined offers cannot be modified. This is not verified e-signing or payment processing.
+[Live Website](https://aarush1909.github.io/FreeLanzo/) · [GitHub Repository](https://github.com/Aarush1909/FreeLanzo)
 
----
+**Current release:** Phase 4.3 — simplified, responsive website with authentication, role-specific dashboards, freelancer portfolios, discovery, real-time text messaging, work offers, blocking, and email verification. The latest follow-up fixes improve the mobile menu, chat actions, login-page spacing, and **Find Your Field** category navigation.
 
-## Phase 3.6 — Freelancer visibility on Dashboard Home
-
-Freelancers now manage their profile **discoverability** from **Dashboard Home**, below the profile completion card and above Quick Access. The toggle and **Save visibility** button have been **moved**, not duplicated. The old visibility panel was removed from Settings; account and security controls remain in Settings. The existing Firestore publishing workflow and permissions are unchanged. English/Hindi/Marathi guidance now points to Dashboard Home.
-
-**Changed files:** `freelancer-dashboard.html`, `dashboard.css`, `js/dashboard.js`, `js/ui-preferences.js`, `README.md`. **New files:** none. **Firestore rules:** no changes needed.
-
-**Test:** Log in as a freelancer, open Dashboard Home, toggle discoverability, click Save visibility, refresh and confirm the status persists. Check that Explore only lists published freelancers. Then confirm the visibility control is absent from Settings and the Client dashboard is unchanged.
+> **Project status:** Feature implementation for the college-project MVP is complete. End-to-end testing with the deployed Firebase project is still required before a public/production launch. FreeLanzo is a student project, not a commercial payment or legally verified contracting service.
 
 ---
 
-# FreeLanzo Phase 3.3 — Experience & Privacy (November 15, 2026)
+## Contents
 
-Built from **Phase 3.2 Google Auth + guest-navigation fix**, preserving all earlier functionality. Adds all six discussed enhancements and the two requested changes:
+1. [About the project](#about-the-project)
+2. [Objectives](#objectives)
+3. [Technology stack](#technology-stack)
+4. [Key features](#key-features)
+5. [Development journey: Phase 1 to Phase 4.3](#development-journey-phase-1-to-phase-43)
+6. [How FreeLanzo works](#how-freelanzo-works)
+7. [Work offers and contract lifecycle](#work-offers-and-contract-lifecycle)
+8. [Project structure](#project-structure)
+9. [Firebase and Cloudinary setup](#firebase-and-cloudinary-setup)
+10. [Run locally](#run-locally)
+11. [Deploy to GitHub Pages](#deploy-to-github-pages)
+12. [Firestore data model](#firestore-data-model)
+13. [Security and privacy](#security-and-privacy)
+14. [Testing checklist](#testing-checklist)
+15. [Known limitations](#known-limitations)
+16. [Possible future improvements](#possible-future-improvements)
 
-1. **Multilingual UI:** header language selector on the landing page, authentication, dashboards, and public profiles. English / Hindi / Marathi strings are stored in `js/ui-preferences.js`, and the selection persists in `localStorage`. Core navigation, actions, form labels, categories and major interface text are translated. Some decorative marketing descriptions, dynamic error notices, and user-written profiles/projects remain in the original language; this is not full machine translation.
-2. **Profile completion:** transparent field-by-field percentage on both dashboards' Home view. Freelancer includes portfolio, skills, category, experience and availability; Client uses five standard profile fields. Progress updates when profile/photo/project data changes.
-3. **Save freelancers:** **Clients only** can save/remove published freelancers in Explore and view them in **Saved Freelancers**. Bookmarks stored privately in `users/{clientUid}/savedFreelancers/{freelancerUid}`. Removed/unpublished people appear as unavailable with a remove action. Only the client can read their own list.
-4. **Light/Dark mode:** global theme button in header; preference saved in `localStorage`. CSS stays compatible with the original minimalist theme.
-5. **Advanced directory filters:** skill search, experience level (Beginner/Intermediate/Expert), availability (Available/Busy), plus existing name search/category, and Clear Filters. Freelancers can set experience and availability on My Profile. Older profiles without the new fields still appear with no advanced filter selected.
-6. **Privacy & deletion:** existing freelancer visibility controls retained. Both roles can request full deletion via Settings. Requires typing `DELETE` plus password reauthentication or Google reauthentication. Deletes their own Firestore portfolios, saved bookmarks, public projects/profile and private user profile; then deletes the Firebase Authentication identity. **Do not use this client-side demo deletion approach in production:** network failures can partially complete deletion and require administrator assistance, Cloudinary unsigned assets are **not** deleted by the browser, and references held in other clients' saved lists are not globally cleaned. A production app needs a trusted backend for reliable orchestration and Cloudinary deletion.
-7. **Automatic login role:** role-selection inputs are **removed from login.html only**. Signup still asks Freelancer/Client and saves it at registration. On login the role is verified from private Firestore `users/{uid}` and `dashboard.html` routes to the matching dashboard. Google signup still rejects an already registered FreeLanzo profile.
-8. **Photo size now 10–200 KB (decimal) after cropping:** original JPG/PNG/WebP image may be up to 10 MB; the processed upload image must be 10,000–200,000 bytes. Image processing crops centrally and searches for a compliant output at multiple resolutions; images that cannot fit the range are rejected with an explanation. This is **browser-side validation only**. A Cloudinary unsigned preset is publicly callable outside the app and cannot enforce this limit without a verified backend.
+## About the project
 
-**Phase 3.3 compatibility fixes:** Existing saved freelancer experience and availability values are loaded back into the edit form. Updating a published avatar rebuilds its public record with the new fields, so older Phase 3.1 profiles work with the revised Firestore rules. Category navigation uses canonical English URL parameters even while interface labels are translated.
+**FreeLanzo** is a web-based platform that helps freelancers present their skills, publish portfolios, and connect with clients looking for project collaborators. Instead of simply displaying sample cards or fake conversations, it uses Firebase for real accounts, persistent data, and two-way messages.
 
-## REQUIRED DEPLOYMENT STEPS
+Two account types are supported:
 
-1. Back up the working FreeLanzo directory and replace with this package, including new `preferences.css` and `js/ui-preferences.js`.
-2. In **Firebase Console → Firestore Database → Rules**, paste **this updated `firestore.rules`** and click **Publish**. **This is essential** for saved bookmarks, new experience/availability profile fields, and account deletion. If you already implemented later phases, **merge** the rules instead of blindly replacing them.
-3. Push the repository to GitHub Pages and refresh with Ctrl+Shift+R. Your Firebase and Cloudinary identifiers are already present; don't commit API secrets.
-4. Test on a separate temporary account; **avoid testing account deletion on a real account**.
+| Freelancer | Client |
+|---|---|
+| Creates a personal profile and portfolio projects | Creates a personal/client profile |
+| Publishes or hides a discoverable freelancer profile | Discovers and saves freelancers |
+| Receives and replies to messages | Starts conversations with published freelancers |
+| Reviews, accepts, or declines client work offers | Sends work offers and cancels pending offers |
+| Can block/unblock another participant | Can block/unblock another participant |
 
-## PHASE 3.3 CHECKLIST
+The interface uses a **minimal, original black/white/red visual style** with responsive layouts, and supports **English, Hindi, and Marathi** for major UI text. The aesthetic is inspired by high-contrast editorial/industrial design but does not use third-party brand assets.
 
-- [ ] Login with email and Google **without selecting a role**; both account roles route correctly.
-- [ ] Signup still collects Freelancer/Client role; Google signup using an existing FreeLanzo profile shows an error.
-- [ ] English/Hindi/Marathi switches core UI labels; refresh and confirm selected language persists.
-- [ ] Toggle dark/light theme; refresh and check mobile and desktop contrast.
-- [ ] Profile completion changes after saving bio, photo, and portfolio fields.
-- [ ] A Client can save a published freelancer, see it under Saved Freelancers, remove it, and cannot read another client's saved list.
-- [ ] Freelancer saves Experience and Availability; advanced Explore filters match these values.
-- [ ] Original photos up to 10 MB open the crop editor; the final upload is 10–200 KB or shows a clear validation error.
-- [ ] Test freelancer visibility and existing portfolio CRUD; signed-out guests still see the homepage category notice.
-- [ ] On a **disposable test account only**, confirm the delete flow reauthenticates and removes Firestore/Auth account data. Confirm Cloudinary asset deletion still requires an administrator.
+## Objectives
 
-## Updated files relative to Phase 3.2 Google Auth Fix
+- Create a useful and responsive portfolio platform using web fundamentals.
+- Offer separate experiences for Clients and Freelancers.
+- Protect private accounts while enabling opt-in freelancer discovery.
+- Allow genuine, persistent, one-to-one communication.
+- Record simple work-offer terms without implementing payments.
+- Explore Firebase Authentication, Firestore real-time updates, Security Rules, and third-party image hosting.
+- Keep the website deployable to a static hosting service such as GitHub Pages.
 
-Modified: `login.html`, `index.html`, `signup.html`, `reset-password.html`, `terms.html`, `privacy.html`, `freelancer-profile.html`, `freelancer-dashboard.html`, `client-dashboard.html`, `js/auth-pages.js`, `js/avatar.js`, `js/dashboard.js`, `script.js`, `firestore.rules`, `README.md`.
-New: `js/ui-preferences.js`, `preferences.css`.
+## Technology stack
 
----
+| Layer | Technologies | Purpose |
+|---|---|---|
+| Frontend | HTML5, CSS3, vanilla JavaScript (ES modules) | Pages, layout, forms, navigation, responsive UI |
+| Authentication | Firebase Authentication | Email/password and Google sign-in, email verification, sessions |
+| Database | Cloud Firestore | Private profiles, published portfolios, bookmarks, chats, offers, block records |
+| Real-time messaging | Firestore `onSnapshot` | Immediate updates to conversations and inbox |
+| Security | Firestore Security Rules | Owner, participant, and role-based data permissions |
+| Profile images | Cloudinary | User-selected cropped profile photos |
+| Hosting | GitHub Pages | Static public website |
+| Local development | VS Code + Live Server (or another HTTP server) | Test the website locally |
+| Optional rule testing | Node.js, Firebase CLI, Firebase Emulator Suite, Java | Local Firestore rule tests |
 
-# FreeLanzo Phase 3.2 — Landing category → filtered Explore
+**No React, application server, Firebase Storage for chat, or payment gateway is required for the current MVP.** A Node.js build step is not needed to serve the site. The included `package.json` is for optional Firebase rules testing, not for building the website.
 
-This is an incremental Phase 3.1 update. All existing authentication, dashboards, profiles, projects, and photos are preserved.
+## Key features
 
-## New behavior (updated: no forced guest redirect)
+### Landing page and discovery
 
-- All **15** Find Your Field cards on the landing page are keyboard-accessible links.
-- **Signed-in clients and freelancers:** selecting a category opens their role-correct dashboard at **Explore Freelancers**, with the exact category preselected. The normal search and filters still work.
-- **Visitors without an account:** the landing page shows **“Sign up or log in first to see freelancers”** and **keeps them on the home page**. They can choose Log In, Sign Up, or Not now; there is no automatic redirect.
-- If an existing member clicks **Log in** from the signup page, the category is preserved. Successful signup/login also returns the member to the filtered directory.
-- The destination always checks Firebase Auth; no private freelancer data is exposed to guests. Published public portfolios remain owner-editable only.
-- No new Firestore rules or collections are needed. Existing Explore currently loads **up to 80** published freelancer profiles, then filters them; results beyond that limit need pagination in a later scaling pass.
+- Home, Categories, Why FreeLanzo, and About Us sections.
+- A responsive landing page with search and category filtering.
+- **15 freelancer categories:** Web Development; Graphic Design; Mobile App Development; Digital Marketing; Video Editing; Writing & Translation; Data Science & Analytics; AI & Machine Learning; UI/UX Design; Photography; Cybersecurity; 3D Design & Animation; Virtual Assistance; Business & Consulting; Education & Tutoring.
+- **Find Your Field** cards: a signed-in user is sent to their dashboard's **Explore Freelancers** view with the chosen category selected; guests see a login/signup prompt instead of being silently redirected.
+- Signed-in visitors see a profile/dashboard entry rather than guest authentication buttons.
 
-## Modified files (relative to the previous Phase 3.1 ZIP)
+### Authentication and account management
 
-1. `index.html` — clickable 15 cards, a dismissible guest notice with Log In / Sign Up / Not now, category-navigation module.
-2. `styles.css` — linked-card focus/hover/hidden styles and guest notice actions.
-3. `js/dashboard-router.js` — preserves `view=explore` and category while choosing the right dashboard; returns guest category deep-links to the home-page notice.
-4. `js/dashboard.js` — preselects the category filter and preserves it across role redirects.
-5. `js/auth-pages.js` — preserves chosen category through signup/login and redirects to filtered Explore.
-6. `js/cloudinary-config.js` — includes your previously supplied Cloudinary cloud name and unsigned preset, so replacing the whole ZIP won't wipe your setup. These are public identifiers; no secret is included.
-7. `README.md` — this update and checkpoints.
+- Email/password signup and login, plus Google authentication.
+- Required **Client/Freelancer** account type at signup. **Login detects the saved role automatically**; there is no login-page role selector.
+- Password confirmation, show/hide controls, required Terms acknowledgement, and helpful validation messages.
+- **Remember me** controls Firebase session persistence.
+- Password reset by email.
+- **Email verification for newly registered email/password accounts**, with a dedicated verification page, resend option, and verification-status check. New Google accounts do not need a separate verification step; older accounts without the new verification flag retain legacy behavior.
+- Authenticated role-based dashboard routing and sign-out functionality, including **Sign Out inside the mobile three-line navigation menu**.
 
-## New files
+### Profiles and portfolios
 
-1. `js/category-navigation.js` — Auth-aware landing category navigation; guests stay on the page and can choose whether to log in or sign up.
+- Editable name, headline, location, and biography for both roles.
+- Freelancer skills, primary category, experience level, and availability.
+- Freelancer portfolio project **create, read, update, and delete** operations, including descriptions and optional links.
+- A profile-completion indicator on dashboard home.
+- Upload, crop, preview, or remove a profile photo.
+- **Original photo:** up to **10 MB** for cropping. **Final processed/uploaded photo:** **10–200 KB** (10,000–200,000 bytes). Accepted image formats include JPG, PNG, and WebP.
+- Opt-in **Show up in Explore Freelancers** setting on the **Freelancer Dashboard Home**. Unpublished freelancers are hidden from the directory.
+- Read-only public freelancer profile and published project pages for signed-in members. Private account email and other sensitive account fields are not published in directory records.
 
-## Install and test
+### Freelancer search and bookmarks
 
-1. Back up your current working FreeLanzo folder.
-2. Extract this ZIP and replace the **modified files** listed above; add the **one new file** in `js/`. Keep every other file unchanged.
-3. Start Live Server. Test selecting **Web Development** while logged in as Client: it should open Client → Explore with **Web Development** selected. Repeat with Freelancer.
-4. Log out, select **Graphic Design** from the home page: notice appears but you **remain on the home page**. Choose Sign Up and create a test account; it should open Explore with Graphic Design selected.
-5. Test **Already have an account? Log in** from the signup page: the category should remain selected after signing in.
-6. Test the mobile category grid and category search.
+- Explore real published freelancer accounts (no fictional profiles).
+- Search by name, skills, and relevant profile text; filter by category, experience level, and availability.
+- **Saved Freelancers** for Clients, with private user-specific bookmarks.
+- Selected homepage categories carry over into Explore.
 
-No Firebase or Cloudinary console changes are required for this update.
+### Messaging and work offers
 
----
+- Real-time, persistent **one-to-one text chat between a Client and Freelancer** using Firestore listeners.
+- Conversation inbox, recent-message previews, timestamps, and unread counters.
+- Chat history pagination in batches of **100 messages**, including **Load earlier messages**.
+- Today/Yesterday/date separators, failed-send feedback, and retry without intentionally creating duplicate message IDs.
+- Conversations and offers are restricted to their participants by Firestore rules; unrelated users cannot read them.
+- A **three-dot menu** in each conversation header with **Work Offer** (Client only) and **Block/Unblock User** actions.
+- Blocked pairs cannot exchange new messages or offers; past messages remain readable to the participants.
+- On small screens, chat provides a way back from the conversation to the inbox.
+- **Text-only messaging:** no attachments, voice calling, automatic replies, or chat media uploads.
 
-# FreeLanzo — Phase 3.1: Profile photos + read-only public freelancer portfolios
+### Work-offer management
 
-**Built directly on Phase 3.** All Phase 1 landing content and approved FL logo, Phase 2 Firebase login/signup, and Phase 3 role-specific dashboards are preserved. Uses your existing Firebase project **`freelanzo-82`**. HTML/CSS/vanilla JS, hosted on a static HTTP server such as Live Server or GitHub Pages. The existing Messaging section is still a placeholder.
+- Clients can send a structured offer with company/person name, INR amount, description, deadline, working days, hours/timezone, payment terms, and a signature image (**maximum 30 KB**).
+- Freelancers can accept or decline pending offers; Clients can cancel pending offers.
+- Offers have recorded statuses and cannot be edited after sending. Finalized terms/statuses cannot be arbitrarily changed.
+- Confirmation before acceptance or decline, plus a print-friendly offer summary.
+- Offer records are saved in Firestore; **no money is collected or transferred**.
 
-## 1. Install
+### Preferences and mobile usability
 
-1. Back up your working FreeLanzo folder.
-2. Extract the entire ZIP and use **all** its files, including the `/js` and `/assets` folders. Open this folder in VS Code.
-3. Open Firebase Console → `freelanzo-82` → Firestore Database → Rules, paste the new `firestore.rules`, then **Publish**. If you already added rules for messaging or another later phase, **merge those rules**; do not replace them with the template alone.
-4. Continue using Firebase Authentication with the previously configured Email/Password + Google providers. Don't create a new Firebase project or change its config.
-5. Launch `index.html` via Live Server. Opening by `file://` doesn't support all Firebase modules.
+- Light and dark appearance modes, with preference saved in the browser.
+- English, Hindi, and Marathi options for core interface text; this is **not automatic translation of user-written content**.
+- Responsive landing, login, freelancer/client dashboards, and chat layouts.
+- Improved login-header spacing, mobile three-line menu, and mobile Sign Out.
+- Keyboard/focus and status-message improvements in key interactions.
 
-## 2. Configure Cloudinary for photos (free plan; YOUR cloud name required)
+## Development journey: Phase 1 to Phase 4.3
 
-1. Create or sign in to a Cloudinary account at https://cloudinary.com/ .
-2. In Cloudinary's Console find the **Cloud name** (not API key or API secret).
-3. In Settings → Upload → Upload Presets, create a preset, choose **Unsigned** signing mode and name it something like `freelanzo_profile_photos`.
-4. Restrict the preset: **image-only use**, **allowed formats JPG/PNG/WebP**, and preferably a fixed asset folder such as `freelanzo/avatars`; enable automatic normalization to reasonable avatar dimensions and remove metadata if those options are available in your Cloudinary UI. Do **not** accept arbitrary file types or expose your API secret. Make sure the preset is **Unsigned**.
-5. Open `js/cloudinary-config.js` and replace these placeholders:
+| Release | What was added or changed |
+|---|---|
+| **Phase 1 — Landing page** | FreeLanzo branding and logo, minimalist responsive homepage, 15 categories, site information, search, and category-filter UI. |
+| **Phase 2 — Authentication** | Firebase setup, email/password and Google sign-in, signup, Terms/Privacy pages, password reset, account roles, session management. |
+| **Phase 3 — Dashboards** | Role-specific Client/Freelancer dashboards, editable profiles, freelancer portfolio CRUD, published directory and settings. |
+| **Phase 3.1 — Photos and public profiles** | Cloudinary profile photos; read-only published freelancer pages with project previews; owner-only/private data separation. |
+| **Phase 3.2 — Category navigation** | Homepage category links to filtered Explore, plus guest-category behavior and Google authentication fixes. |
+| **Phase 3.3 — Experience and privacy** | English/Hindi/Marathi, light/dark mode, profile completion, saved freelancers, advanced filters, account deletion, and automatic login role detection. |
+| **Phase 3.3 refinements** | Crop editor and final-image 10–200 KB rule; responsive theme and translation adjustments. |
+| **Phase 3.6 — Dashboard and reliability** | Discoverability setting moved to Freelancer Dashboard Home; operation loading states and account-deletion recovery improvements. |
+| **Phase 4 — Messaging and offers** | Real-time text chat, private participant-only conversations, and client-to-freelancer work offers. |
+| **Phase 4.1 — Chat/offer refinement** | Unread counts, timestamps, detailed offer fields and payment terms, immutable status transitions, client cancellation and confirmation prompts. |
+| **Phase 4.2 — Final-candidate features** | Block/unblock, older-message pagination, resend/retry feedback, chat date separators, printable offers, email verification, and conversation closure during account deletion. Reporting was temporarily prototyped here. |
+| **Phase 4.3 — Simplified release** | **Report and admin moderation were removed**. Blocking, verification, messaging and offers remained. No admin account or service-account setup is required. |
+| **Phase 4.3 UI and bug-fix patches** | Login-page spacing, conversation three-dot actions, mobile chat/back navigation, Sign Out in the mobile three-line menu, and a fix to avoid duplicate category-card handlers incorrectly prompting signed-in users to log in. |
 
-```js
-export const CLOUDINARY_CLOUD_NAME = "your_cloud_name";
-export const CLOUDINARY_UPLOAD_PRESET = "freelanzo_profile_photos";
+> **Current behavior takes precedence over earlier releases.** In particular: there is **no Report feature**, no moderation dashboard, no login role selector, no chat attachment option, and the final cropped avatar limit is **10–200 KB**, not the original Phase 3.1 limit.
+
+## How FreeLanzo works
+
+### Freelancer journey
+
+1. Open FreeLanzo and register as a **Freelancer** (or sign in to an existing Freelancer account).
+2. Complete email verification if required for a new password account.
+3. Complete the profile, select a main category and skills, and optionally upload a cropped profile photo.
+4. Add portfolio projects in **My Portfolios**.
+5. Enable **Make my freelancer profile discoverable** from **Dashboard Home** to appear in Explore.
+6. Receive Client messages, discuss a project, and accept or decline an offered contract.
+7. Manage account preferences or block a conversation participant if necessary.
+
+### Client journey
+
+1. Register as a **Client** (or sign in to an existing account).
+2. Complete the profile and open **Explore Freelancers**.
+3. Search by category, skill, experience, or availability; save relevant freelancers.
+4. Open a published freelancer profile and start a conversation.
+5. Use the conversation's three-dot menu to prepare and send a **Work Offer**.
+6. Review its status and, if still pending, cancel it if plans change.
+
+### Guest journey
+
+Guests can browse the homepage and categories but cannot view private conversations or workspaces. Clicking a **Find Your Field** card while signed out shows an invitation to log in or sign up. After authenticating, the selected category can be carried into Explore.
+
+## Work offers and contract lifecycle
+
+Each work offer contains the Client/company name, payment amount (**INR**), project description, deadline, working days/hours, timezone, payment terms and optional payment details, and a **client-provided image signature no larger than 30 KB**.
+
+```text
+                       Client sends offer
+                               |
+                            PENDING
+                      /        |         \
+          Freelancer accepts   |    Freelancer declines
+                    |          |             |
+                 ACCEPTED      |          DECLINED
+                               |
+                      Client cancels
+                               |
+                            CANCELLED
 ```
 
-6. Save, reload the page, and try uploading a photo between 100 and 200 KB from **My Profile**.
+- Only Clients initiate offers.
+- Only the named Freelancer accepts or declines a pending offer.
+- The Client can cancel a **pending** offer, but not an accepted/declined one.
+- Accepted, declined, and cancelled offers are final states; the saved terms cannot be edited.
+- If terms need to change, the Client can cancel a pending offer and send a new one.
+- A signature image is **not** a legally verified e-signature; recorded offers are **not** an escrow or payment solution.
 
-**Important security/limits:** This static-hosting version uploads directly to a Cloudinary **unsigned** preset. The browser rejects files above **10,000–200,000 bytes (10–200 KB)** and normalizes them to a center-cropped square (400–1000 px, as needed) before upload. Cloudinary does **not** offer a per-unsigned-preset server-enforced file-size limit; an attacker using the public preset outside this UI can bypass browser checks. For a production site that needs a strict server-side 10–200 KB limit or per-user upload permission, add a verified Firebase Auth backend that validates the file and performs signed uploads. Unsigned uploads also require external Cloudinary administration to delete files; pressing **Remove photo** removes the URL from FreeLanzo, but does not delete the Cloudinary asset itself. Never commit a Cloudinary API secret to this repository.
+## Project structure
 
-## 3. Photo upload and display
+### GitHub Pages repository (current flat-file layout)
 
-- On Freelancer and Client dashboards → **My Profile**, choose JPG, PNG, or WebP of **10–200 KB**, preview the cropped image, then click **Upload photo**.
-- Uploaded images are converted to a center-cropped square (400–1000 px, as needed) and compressed (usually to WebP) before upload; we check the upload blob is also between 100 and 200 KB.
-- The Cloudinary HTTPS URL is stored only as `avatarURL` on the private `/users/{uid}` document and copied to the public freelancer directory only when the freelancer has explicitly published their profile.
-- The picture displays in the landing-page signed-in header, dashboard header, sidebar, profile preview, Explore listings, and published freelancer profile page.
-- **Remove photo** clears the reference from the user's profile and any published freelancer profile. Empty images show initials.
-- The standard `photoURL` value from Phase 2 Google signup is not automatically placed on the public freelancer page. Only a user-chosen photo is shared publicly.
+Your deployed GitHub repository keeps JavaScript and SVG files **in the repository root**. The site works with this layout when HTML script/asset references and JavaScript imports point to those root-level files.
 
-## 4. Read-only public freelancer profile
+```text
+FreeLanzo/
+├── index.html                   # Landing page and Find Your Field
+├── login.html                   # Sign-in
+├── signup.html                  # Registration
+├── reset-password.html          # Password reset
+├── verify-email.html            # New-account email verification
+├── dashboard.html               # Role-based routing
+├── client-dashboard.html        # Client workspace
+├── freelancer-dashboard.html    # Freelancer workspace
+├── freelancer-profile.html      # Published, read-only profile
+├── terms.html                   # Project Terms draft
+├── privacy.html                 # Project Privacy draft
+├── styles.css                   # Landing design
+├── auth.css                     # Authentication pages
+├── dashboard.css                # Dashboard, chat and mobile styling
+├── preferences.css              # Theme and preferences styling
+├── script.js                    # Homepage search/navigation UI
+├── category-navigation.js       # Firebase-aware category navigation
+├── session-nav.js               # Signed-in header/profile link
+├── auth-pages.js                # Login, signup and password reset
+├── firebase-config.js           # Public Firebase web configuration
+├── firebase.js                  # Firebase initialization
+├── dashboard-router.js          # Route users by saved role
+├── dashboard.js                 # Profiles, Explore, portfolios, settings
+├── messaging.js                 # Real-time chat, offers, blocks
+├── public-profile.js            # Read-only profile loading
+├── avatar.js                    # Photo processing/upload
+├── avatar-crop.js               # Photo crop interface
+├── cloudinary-config.js         # Cloudinary public identifiers
+├── ui-preferences.js            # Language and theme preferences
+├── verify-email.js              # Verification UI actions
+├── favicon.svg
+├── freelanzo-logo.svg
+├── freelanzo-monogram.svg
+└── README.md
+```
 
-1. Sign in as a **Freelancer**. In **My Portfolios**, add one or more project descriptions.
-2. On **Dashboard Home**, enable **Make my freelancer profile discoverable**, then **Save visibility**. Existing projects are copied into an allowlisted public project collection; unpublished projects stay accessible only to you.
-3. Sign in as a **Client** (or another Freelancer). Open **Explore Freelancers**, choose a real published person and click **View full profile**.
-4. The new `freelancer-profile.html?id=<uid>` shows: their chosen photo, name, headline, category, location, bio, skills, and published projects with optional safe project links. There are **no edit/delete buttons** and the viewer's Firestore rules cannot write to someone else's profile or projects.
-5. Contact fields such as the registered **email** (or any private account field) are never copied to public collections. The app also attempts to redact typical phone/email patterns if they are accidentally typed in the published bio, titles or descriptions. Redaction is best-effort; advise users never to place sensitive information in free-text public fields.
-6. If the freelancer unpublishes their profile, visitors lose access to their public page and public projects immediately. Re-publishing synchronizes their current projects again.
-7. New/edited/deleted portfolio projects are updated in private and public collections **atomically** while the freelancer is published. Projects are always owner-editable, visitor-read-only.
+Some full-release development ZIPs instead store JavaScript inside `js/` and logos inside `assets/`. **Do not combine paths from the two layouts without updating imports and HTML references.** For your current GitHub repository, use the root-level versions from the GitHub-specific patches.
 
-## 5. Firestore collections and permission model
+### Optional development-only files
 
-| Path | Read permissions | Write permissions |
-|---|---|---|
-| `users/{uid}` | Account owner only | Owner, restricted profile fields (role & email cannot change) |
-| `users/{uid}/portfolios/{id}` | Owner only | Freelancer owner only |
-| `publicFreelancers/{uid}` | Signed-in members when published; owner | Freelancer owner only, allowlisted public fields |
-| `publicFreelancers/{uid}/projects/{id}` | Signed-in members when parent is published; owner | Freelancer owner only, allowlisted project fields |
+These may exist in a local full release but **do not need to be uploaded for GitHub Pages**:
 
-Firestore **security rules**, not hidden UI controls, enforce access. No `allow read, write: if true` is included. Public project records are copies containing only title, category, description, optional project link and timestamps—not email, phone, or the owner's private account document.
+```text
+firestore.rules                # Publish separately in Firebase Console
+firebase.json                  # Local emulator configuration
+package.json                  # Local rule-test dependencies/scripts
+tests/                       # Local Firestore and structure tests
+PHASE4_SETUP.md               # Additional release guidance
+PHASE4_3_DEPLOY.md            # Phase 4.3 deployment notes
+```
 
-## 6. Checkpoints for testing
+## Firebase and Cloudinary setup
 
-- [ ] Existing signup (Google + email/password), login, role checks and password reset still work.
-- [ ] Freelancer and Client both upload an image between 100 and 200 KB; show it in the header, sidebar and My Profile.
-- [ ] A file outside 10–200 KB is rejected with a message; non-image types are rejected.
-- [ ] Profile photos can be removed and revert to initials.
-- [ ] A freelancer who has not published does **not** appear in Explore.
-- [ ] Publish a freelancer; open their **View full profile** link as a Client.
-- [ ] Public page shows their projects and no edit/delete controls.
-- [ ] As a Client, attempting to directly read another member's `users/{uid}` or private `portfolios` path in Firestore should be denied.
-- [ ] Add, edit and delete a project as a published Freelancer; refresh the public page and verify the changes.
-- [ ] Turn off public visibility; public profile and projects become unreadable by another user.
-- [ ] Sign out and visit a public profile link: it should ask you to log in.
-- [ ] Mobile navigation, Explore search and category filters still work.
+The website uses an **existing Firebase project**. The checked project configuration references `freelanzo-82`; use whatever project is actually configured in the deployed `firebase-config.js`. You do **not** need to create a separate project for each phase.
 
-### File map
+### 1. Firebase Authentication
 
-- `js/avatar.js` — input validation, resize/compress, Cloudinary upload, safe avatar rendering.
-- `js/cloudinary-config.js` — *your* Cloudinary cloud name and unsigned preset.
-- `js/dashboard.js` — updated private profiles, photos, public portfolio synchronization and Explore links.
-- `js/session-nav.js` — signed-in landing header avatar.
-- `freelancer-profile.html`, `js/public-profile.js` — read-only published freelancer profile + projects.
-- `firestore.rules` — updated read/write validation and public visibility guard.
-- `dashboard.css` and `styles.css` — avatar and public-profile layouts.
-- All other pages/code/assets continue from Phase 3.
+1. Go to [Firebase Console](https://console.firebase.google.com/).
+2. Select the project referenced by `firebase-config.js`.
+3. Open **Authentication → Sign-in method** and enable **Email/Password** and **Google**.
+4. In **Authentication → Settings → Authorized domains**, authorize your GitHub Pages host: `aarush1909.github.io`. Keep your local development host (`localhost`, or `127.0.0.1` when applicable) authorized for testing as needed.
+5. Under **Authentication → Templates**, review the email-verification and password-reset emails. Test verification with a new disposable password account.
 
-## Notes for team demos
+Email verification is handled by `verify-email.html` and `verify-email.js`; the verification-required flag applies to new password registrations. Firebase Authentication still performs the actual email verification.
 
-This source bundle passed local static validation and JavaScript syntax checks. **Live Cloudinary and Firebase behavior requires your own project/preset credentials and testing in your browser.** Cloudinary free-tier allowances and availability can change, so check the provider's current plan before relying on it for a production service.
+### 2. Cloud Firestore and Security Rules
 
-## Phase 3.2 guest-category fix (November 15, 2026)
+1. Ensure a **Cloud Firestore** database exists in the same Firebase project.
+2. In **Firestore Database → Rules**, review and publish the **Phase 4.3 `firestore.rules`** appropriate for the currently deployed messaging code.
+3. Back up existing rules before changes, especially if other collections were added manually.
+4. Deploy the matching frontend and security rules together when updating messaging schemas. Do not revert to open-access rules.
+5. Use disposable Client and Freelancer accounts to verify the actual permissions.
 
-**What was wrong:** Landing category cards were still ordinary links to `dashboard.html`.
-When Firebase scripts failed to load or were delayed, the login check never ran and
-an unsigned visitor landed on the "Opening your workspace" route page.
+**Important:** Publishing website files on GitHub **does not publish Firestore Security Rules**. The latter are configured in Firebase Console (or via an intentional Firebase CLI deployment).
 
-**What is now different:** All fifteen cards have guest-safe `index.html` fallback URLs.
-The regular `script.js` intercepts clicks and displays the Login / Sign Up / Not now
-notice without needing Firebase. `js/category-navigation.js` reports signed-in status
-once Firebase loads; only confirmed signed-in accounts navigate to filtered Explore.
-Guest users remain on the home page, including if Firebase is offline or they use
-"Open in new tab". No database, Firebase, or Cloudinary settings need changing.
+### 3. Cloudinary profile photos
 
-**Modified files (3):** `index.html`, `script.js`, `js/category-navigation.js`.
-`README.md` was also updated (documentation only). **New files: none.**
+1. Set up a Cloudinary account and an **unsigned, image-only upload preset**.
+2. Configure the cloud name and preset in `cloudinary-config.js`.
+3. Restrict the preset to suitable image formats/folders where supported.
+4. Test the crop-and-upload flow: original image up to **10 MB**, processed image **10–200 KB**.
 
-**Quick test:** Open the site with Live Server in a private/incognito window,
-click Web Development, and verify the guest prompt appears on the landing page.
-Choose Not now to dismiss. Then sign in and click the same category: you should
-reach Explore Freelancers with Web Development selected. Test Ctrl+Click on a card
-while logged out as well. Refresh with Ctrl+Shift+R if the browser cached old JS.
+Never put a Cloudinary API secret, Firebase service-account key, or other private administrator credentials in browser code or your public GitHub repository. The Firebase **web app config** is public by design; access control depends on Authentication and Security Rules.
 
+### Not required for this release
 
-### Photo crop editor (Phase 3.3 refinement)
-Selecting an original JPG, PNG or WebP up to 10 MB opens a crop dialog. Drag to reposition the square crop, use the zoom slider (1–4×), and press **Use this crop**. Keyboard users can focus the canvas and use arrow keys (Shift+arrows for larger movement). The crop is compressed to a 10–200 KB square prior to Cloudinary upload. Cancel does not change the saved profile photo. All size checks are client-side only; Cloudinary does not enforce them unless configured server-side.
+- A Firebase Admin SDK service account or admin custom-claim setup.
+- An admin dashboard or reporting/moderation backend.
+- Firebase Storage for messaging attachments.
+- A payment gateway or a dedicated backend web server.
 
----
+## Run locally
 
-## Phase 3.3 — Dark theme and Hindi/Marathi display fix (15 November 2026)
+1. Clone or download the repository:
 
-This update fixes the inconsistent dark mode and partially untranslated content reported in the homepage screenshots while preserving Phase 3.3 functionality, Google/email authentication, dashboard routing, Cloudinary uploads, photo cropping and Firestore rules.
+   ```bash
+   git clone https://github.com/Aarush1909/FreeLanzo.git
+   cd FreeLanzo
+   ```
 
-- **Consistent dark mode:** Categories, How It Works, Why FreeLanzo, About, CTA, directory cards, form inputs and category guest notices now use readable dark surfaces and appropriate contrast. The intentionally dark showcase/illustrations retain their original aesthetic. Header profile card, search box, mobile menu, account/portfolio cards and legal pages have matching dark styles.
-- **Broader multilingual coverage:** Hindi and Marathi translations now cover homepage hero and section titles, descriptive copy, buttons, navigation, category guest notices/counts, account page headings, profile/directory UI, and privacy/terms pages. Dynamic directory counts and category guest notices are localized. User-provided profile and project text is intentionally not machine-translated.
-- **Better Devanagari layout:** Headings use a Devanagari-capable font fallback and adjusted tracking, line height and size; translated navigation collapses into a mobile-style menu at narrower widths.
-- **Translation accessibility:** Placeholder text, aria labels and title attributes can now be translated when a translation is provided. Language selection persists in local storage as before.
-- **Accurate copy:** Replaced stale pre-portfolio and 500 KB statements with current Phase 3.3 features and the 10–200 KB final cropped photo upload condition. Terms/Privacy remain student-project drafts and require review before production.
+2. Open the folder in VS Code.
+3. Start **Live Server** (or run any local static HTTP server). Open the address it provides, typically `http://127.0.0.1:5500/`.
+4. Ensure the hostname in your browser is authorized in Firebase Authentication and the Firebase web configuration points to your existing project.
+5. Test the website using separate disposable **Client** and **Freelancer** accounts.
 
-**Files modified compared with the Phase 3.3 crop-editor package:** `preferences.css`, `js/ui-preferences.js`, `index.html`, `dashboard.html`, `privacy.html`, `terms.html`, and `README.md`. No Firebase config or Firestore rules changes required for this visual/language fix.
+Do **not** launch Firebase module pages with the `file://` protocol by double-clicking HTML files. Firebase requests require an internet connection, and the hosted Firebase SDK imports must be reachable.
 
-**Verification:** All JS files passed `node --check`, stylesheets parsed, translation mappings for every static page heading were checked, and a headless Chromium static-page render confirmed dark/HI language compatibility on all 10 HTML pages. The homepage was checked in English/Hindi/Marathi at 1280/960/390px; no horizontal overflow was observed, all major sections rendered dark, and category guest notices localized correctly. These are UI tests **without a live Firebase session**; test signed-in pages with your actual Firebase setup after deployment.
+## Deploy to GitHub Pages
 
-**Deployment:** Replace the changed files or extract the full ZIP into your FreeLanzo repository, commit and push to GitHub Pages. Use **Ctrl+Shift+R** to force-refresh cached CSS/JS. Verify English/Hindi/Marathi × light/dark on your live site.
+1. Back up the working repository and Firebase Security Rules.
+2. Upload/commit the updated website files, **preserving the repository's flat JavaScript/SVG layout** and correcting any links when files are moved.
+3. In GitHub repository **Settings → Pages**, use the branch and root folder configured for the published site.
+4. Make sure `index.html` is at the published root.
+5. Separately publish the matching `firestore.rules` in Firebase Console if the release changes database behavior.
+6. Open **https://aarush1909.github.io/FreeLanzo/** and hard-refresh (`Ctrl + Shift + R` on Windows) after deployment.
+7. Test Login, Google signup, Email Verification, Find Your Field, Explore, Messages, Work Offer, Block/Unblock, and mobile Sign Out.
 
+### Latest Phase 4.3 follow-up fixes
 
-## Phase 3.6 — Account deletion reliability and loading states
+- **Mobile/chat layout:** updated `client-dashboard.html`, `freelancer-dashboard.html`, `auth.css`, `dashboard.css`, and `messaging.js` in the mobile-UI patch.
+- **Sign Out in mobile three-line menu:** updated `client-dashboard.html`, `freelancer-dashboard.html`, and `dashboard.css` in the hamburger-menu patch.
+- **Find Your Field signed-in navigation:** updated `script.js` and `category-navigation.js` in the category-auth bug-fix patch. These must not both register competing handlers for the same category click.
 
-- Profile, portfolio, visibility, avatar upload/removal, bookmarked freelancer saves, directory refresh, initial workspace loading, and sign-out show accessible progress states. Buttons are disabled while their operations are pending and restored on completion/failure.
-- Account deletion now requires recent Firebase reauthentication, hides the freelancer's public profile before removing project copies, removes subcollection documents in batches, and then removes the account document and Firebase Auth identity.
-- A minimal `localStorage` recovery marker associated with the authenticated Firebase UID allows deletion to be **resumed on the same browser** if the operation fails after the Firestore account document is removed. Keep browser storage and don't sign up again until deletion is complete. If the page is reloaded with the profile already gone, a recovery panel appears.
-- **Important limitations:** A browser-only/static GitHub Pages app **cannot provide guaranteed atomic deletion** across Firestore, Firebase Authentication, and Cloudinary. A second device, revoked permissions, or a network outage can interrupt the process. The recovery marker is device-local. For production-grade guaranteed cleanup (including Cloudinary assets and cross-user references), use a securely authenticated Firebase Cloud Function or other backend with administrative credentials and a durable deletion job. Never put Firebase Admin keys or the Cloudinary API secret in browser JavaScript.
-- Firestore rules and Firebase configuration are unchanged. Test deletion ONLY with disposable test accounts; it is irreversible. Be sure to test both Client and Freelancer flows, including Google and password reauthentication and recovery after intentionally interrupting a request.
-- **Known scope**: Phase 4 now enforces 10–200 KB on the final cropped avatar, with originals up to 10 MB.
+The correct files depend on which patch is already on GitHub. When applying an incremental patch, avoid replacing more recent files with older ZIP contents.
 
+## Firestore data model
 
----
-# Phase 4 — Real-Time Text Chat & Work Offers (17 November 2026)
+The current project uses these core paths (abbreviated; actual document fields are validated by the deployed rules):
 
-This version deliberately removes all media attachments from chat. Two registered participants (one Client and one Freelancer) can exchange **text messages only**, stored in Firestore and updated in real time using `onSnapshot`. The inbox shows conversations and most recent message previews. Clients can initiate chats from Explore or a public freelancer profile. The Freelancer can reply.
+```text
+users/{uid}                           # Private account, role, settings and profile
+  portfolios/{projectId}              # Freelancer's private portfolio items
+  savedFreelancers/{freelancerUid}     # Client's private bookmarks
+  blocked/{otherUid}                  # Account-owner block list
 
-## Client work offers
+publicFreelancers/{uid}                # Discoverable freelancer profile (opt-in)
+  projects/{projectId}                # Read-only published portfolio copies
 
-Clients can send a recorded work offer inside a chat with:
-- Client/company or person name
-- Payment amount in INR
-- Selected working days and start/end working hours, with time zone
-- Client signature image in JPG, PNG or WebP **up to 30 KB** (stored privately as a base64 data URL in Firestore)
+conversations/{conversationId}         # Client + Freelancer participants, preview, unread state
+  messages/{messageId}                # Text messages and offer markers
+  contracts/{contractId}              # Work-offer records and status changes
+```
 
-Freelancers can **Accept** or **Decline** a pending offer. Both parties see the outcome in real time. It is a student-project offer record, not an identity-verified legal e-signature or payment service.
+- Private `users` records are **not** the public directory.
+- Only published freelancer profiles and sanitized project copies appear in Explore.
+- Participant checks restrict chat and contract records.
+- Block records belong to the blocking user.
+- **No reporting workflow exists in Phase 4.3.** Earlier experimental `reports` documents, if any, are not automatically deleted by a site update.
 
-## Firebase setup
+## Security and privacy
 
-1. Publish `firestore.rules` from this release in Firebase Console → Firestore Database → Rules. If you've customized rules beyond FreeLanzo, **merge rather than blindly overwrite**.
-2. No Firebase Storage setup, CORS file, Storage rules, or paid Cloud Storage plan is needed for text messaging, offers, or the 30 KB signature image.
-3. Cloudinary remains configured for public profile pictures and is unrelated to chat.
-4. If you deployed a previous media-upload version, separately restrict any existing Firebase Storage `chats/` rules and remove old files as appropriate. Deleting `storage.rules` from this ZIP **does not** undeploy rules or delete already stored media.
+- **Role separation:** roles are selected at signup and stored in Firestore; the dashboard router checks them at login. Security Rules independently protect data.
+- **Private account records:** normal users cannot freely read or edit another person's private user document.
+- **Opt-in discovery:** freelancers explicitly publish their profiles; clients cannot edit them.
+- **Private conversations:** only conversation participants may read their messages and offers. This is **not end-to-end encryption**.
+- **Work-offer permissions:** client and freelancer actions are constrained by role and offer status.
+- **Blocking:** either participant may block the other. Rules prevent new messages and offers when either user has blocked the other; existing history remains available.
+- **Email verification:** rules and UI enforce verification for new password accounts whose record requires it.
+- **No Report button:** report submission and admin moderation were intentionally removed in Phase 4.3.
+- **Account deletion:** requires confirmation and recent reauthentication, but is performed from the browser and is **not a guaranteed atomic server-side deletion**.
+
+### What happens when an account is deleted?
+
+FreeLanzo deletes or hides the departing user's own account/profile data, and closes shared conversations. **The other participant can still read previous messages and offers**; the departed participant appears as **Deleted account**, and further messages to the closed conversation are disabled.
+
+**Deleting a user does not automatically erase shared chat history, signatures contained in old offers, or Cloudinary image assets.** This retention behavior is important for demonstrations and for communicating privacy expectations. To remove *only disposable test chats*, the project owner can carefully delete selected Firestore conversations and their nested records through Firebase Console. Do not delete real user data by mistake.
 
 ## Testing checklist
 
-- [ ] Client starts a conversation with a published Freelancer; both see it in Messages.
-- [ ] Both send text that appears without refresh; history persists after reload.
-- [ ] There is no paperclip/file picker; blank messages cannot be sent.
-- [ ] Client sends a signed work offer (signature JPG/PNG/WebP, <=30,000 bytes) with company/name, INR amount, working days, hours, and time zone.
-- [ ] Freelancer Accepts or Declines; both accounts show the updated decision.
-- [ ] Third registered account cannot read the private conversation or offer.
-- [ ] Attempts to create `kind: 'file'` messages fail against Firestore security rules.
-- [ ] Hindi/Marathi and dark mode, bookmarks, profile visibility, and dashboard behavior still work.
-- [ ] Final cropped profile photos remain **10–200 KB**; originals can be up to **10 MB**.
+Use three disposable accounts when possible: **C = Client**, **F = published Freelancer**, and **X = unrelated user**. Keep testing separate from real user data.
 
-## Changed files in this text-only variant
+### Frontend and account flow
 
-- `js/messaging.js` — removed Storage imports, file previews, uploads and attachment handling; text and work offers preserved.
-- `client-dashboard.html`, `freelancer-dashboard.html` — removed media attachment UI.
-- `firestore.rules` — denies file messages, permits text and contract markers.
-- `dashboard.css` — removed attachment-specific styling.
-- `js/ui-preferences.js` — removed obsolete attachment translations, updated chat description.
-- `privacy.html`, `terms.html` — descriptions no longer promise chat media uploads.
-- `PHASE4_SETUP.md`, `README.md` — updated setup and tests.
-- Removed legacy `storage.rules` and `storage-cors.json` from this release (not required by text-only chat).
+- [ ] Homepage renders on desktop and phone, with working search and all 15 categories.
+- [ ] Login-page logo does not overlap **Back to home**.
+- [ ] Email/password and Google login work, and the saved account role routes to the correct dashboard.
+- [ ] New password accounts receive and complete email verification; resend and password reset work.
+- [ ] Signed-in **Find Your Field** opens Explore with the selected category; guests see Login/Signup prompts.
+- [ ] Light/dark modes and English/Hindi/Marathi core UI text work after a refresh.
+- [ ] On mobile, **Sign Out** is accessible from the three-line menu for both roles.
 
-**Validation:** Local syntax, file-integrity, and interface checks cannot confirm live Firestore permissions. Publish the rules and test with disposable accounts before a demo.
+### Profiles and discovery
 
+- [ ] Freelancer profile and portfolio add/edit/delete persist after refresh.
+- [ ] Photo editor accepts an original file up to 10 MB and produces a compliant **10–200 KB** final image.
+- [ ] Publishing makes a freelancer appear in Explore; unpublishing hides their profile.
+- [ ] Client can save and remove a freelancer; unauthorized users cannot read another client's bookmarks.
+- [ ] Filters for name/category/skills/experience/availability work as intended.
+
+### Chat and work offers
+
+- [ ] Client opens a conversation; Freelancer receives it; both can exchange real-time text.
+- [ ] Unread counts, timestamps, date separators, persistence and **Load earlier messages** work.
+- [ ] Chat's three-dot menu exposes **Work Offer** for Clients and **Block/Unblock** for both roles.
+- [ ] Client sends an offer with all required fields and a signature no larger than **30 KB**.
+- [ ] Freelancer accepts or declines a pending offer; Client cancels a separate pending offer.
+- [ ] Accepted/declined/cancelled offers cannot be edited or reversed; print summary works.
+- [ ] Blocking prevents new chat/offer writes but preserves past messages.
+- [ ] Unrelated user **X** cannot read or change C/F's conversations, offers, or private profiles.
+- [ ] No Report option or chat-attachment control is present.
+
+### Deletion, security and deployment
+
+- [ ] Test account deletion **only** on disposable accounts; the remaining participant sees **Deleted account** and closed chat history.
+- [ ] Firebase Security Rules are the matching Phase 4.3 version.
+- [ ] The same features work from both Live Server and the deployed GitHub Pages URL.
+- [ ] No service-account JSON, Cloudinary API secret, or other admin credential was committed to GitHub.
+
+### Optional Firestore Emulator tests
+
+If you have the **full development release** containing `package.json`, `firebase.json`, `firestore.rules`, and `tests/`, install Node.js and Java, then run:
+
+```bash
+npm install
+npm run test:rules
+```
+
+These are **local security-rule tests**, not required files for GitHub Pages. Their presence does **not** mean they have been run against your live Firebase deployment. Run and review them before relying on rules in production.
+
+## Known limitations
+
+1. **No payments or escrow:** amounts are displayed in INR but no actual payment is processed.
+2. **No verified legal contract signing:** uploaded image signatures are informal records only.
+3. **Text-only communication:** no images, videos, attachments, calling, or automatic chat replies.
+4. **No admin/reporting system:** the Report feature and proposed admin dashboard were removed to keep this college MVP manageable.
+5. **Client-side account deletion:** partial failures and Cloudinary remnants can occur; shared chats/contracts remain for the other participant.
+6. **Cloudinary unsigned uploads:** browser-side photo size checks do not guarantee server-side enforcement against direct requests to a public preset.
+7. **Not end-to-end encrypted:** Firestore rules restrict access, but the system is not a private E2EE messenger.
+8. **Limited production hardening:** rate limits, abuse handling, monitoring, automated backups, accessibility audits, and comprehensive live security testing would be needed for a commercial launch.
+9. **Translation scope:** user-written text, some errors, and some decorative text may remain untranslated.
+10. **Project policy drafts:** `terms.html` and `privacy.html` require legal/privacy review before real commercial use.
+
+## Possible future improvements
+
+If FreeLanzo is expanded beyond the college assignment, possible additions include a proper backend for reliable deletion and photo cleanup, more advanced directory pagination, optional user-reviewed moderation, notification delivery, stronger upload validation, and additional automated testing. **None of these are claimed as currently implemented.**
 
 ---
-## Phase 4.2 — Final candidate (18 November 2026)
 
-New: block/unblock user, private write-only reports, paginated older text messages, send/retry feedback with stable message IDs, Today/Yesterday date separators, print-friendly offers, new password-account email verification, and conversation closure/anonymized inbox names on deletion. Existing real-time chat, unread counts and immutable offers are preserved. Firebase rules now enforce blocks, closed conversations and email verification for newly registered password users.
+**FreeLanzo** — A college web-development project built with HTML, CSS, JavaScript, Firebase, Cloud Firestore, Cloudinary, and GitHub Pages.
 
-**New files:** `verify-email.html`, `js/verify-email.js`, `PHASE4_2_DEPLOY.md`, `PHASE4_2_VIVA.md`, `firebase.json`, `package.json`, `tests/firestore-rules.test.mjs`, `tests/structure-check.py`.
-
-**Historic Phase 4.2 note:** That version included a report button. Phase 4.3 removes reporting entirely. Rules and frontend must be deployed together. A browser still cannot guarantee Cloudinary cleanup or atomic account deletion.
-
-
-## Phase 4.3 — simplified moderation
-The Report button, report submission flow, and Firestore report creation permission were removed. Blocking remains available. No admin dashboard, custom claims, account bans, or moderation notifications are required. See **PHASE4_3_DEPLOY.md**. Existing report documents, if any, are not deleted automatically.
+*README updated for the simplified Phase 4.3 release and latest UI/category-navigation fixes (November 2026).*
