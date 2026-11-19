@@ -100,3 +100,22 @@
 @media(max-width:850px) { .auth-layout { grid-template-columns:1fr; } .auth-panel { padding:62px 25px; } .auth-art { display:none; } .auth-panel-inner { width:min(100%,520px); } .auth-topbar { height:74px; } }
 @media(max-width:520px) { .auth-topbar-inner { width:calc(100% - 36px); } .back-link { font-size:10px; } .auth-panel { padding:47px 18px 60px; } .auth-panel h1,.account-shell h1,.legal-shell h1 { font-size:clamp(40px,11vw,56px); } .role-choice { gap:9px; } .role-card { flex-direction:column; align-items:flex-start; padding:13px 10px; } .role-card-icon { height:30px; width:30px; font-size:20px; } .role-card strong { font-size:12px; } .role-card small { font-size:10px; } .form-between { align-items:flex-start; } .form-between,.check-line { font-size:11px; } .auth-footer { padding:19px 18px; } .account-main { padding:65px 0; } .account-card { flex-direction:column; align-items:flex-start; } .account-actions .btn { width:100%; } .legal-main { padding:50px 0; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important; animation:none !important; } }
+
+/* Phase 4.3 mobile polish: keep login navigation separated from the logo. */
+.auth-topbar-inner { gap: 20px; min-width: 0; }
+.auth-topbar-inner .brand { min-width: 0; flex: 0 1 auto; }
+.auth-topbar-inner .back-link { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; }
+@media (max-width: 520px) {
+ .auth-topbar-inner { gap: 12px; }
+ .auth-topbar-inner .brand { gap: 6px; font-size: clamp(16px, 5vw, 21px); }
+ .auth-topbar-inner .brand img { width: 32px; height: 32px; }
+ .auth-topbar-inner .back-link { font-size: 10px; }
+}
+@media (max-width: 345px) {
+ .auth-topbar-inner .brand { font-size: 15px; }
+ .auth-topbar-inner .brand img { width: 28px; height: 28px; }
+}
+/* Keep Back to home visible on phones; overrides the older mobile hide rule. */
+@media (max-width: 620px) {
+  .auth-topbar .auth-topbar-inner .back-link { display:inline-flex; }
+}

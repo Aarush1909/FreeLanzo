@@ -333,3 +333,55 @@
 
 .chat-shell{--muted:#555950}
 html[data-theme="dark"] .chat-shell{--muted:#bcbfb6}
+
+/* Phase 4.3 mobile UX polish: accessible chat options, mobile inbox/room and sign-out. */
+.dash-mobile-account-actions{display:none}
+.chat-room-title{min-width:0;flex:1;display:flex;align-items:center;gap:12px}
+.chat-room-title > div{min-width:0}
+.chat-room-title h2{overflow-wrap:anywhere}
+.chat-back-to-inbox{display:none;align-items:center;gap:6px;min-height:42px;padding:8px 10px;border:1px solid var(--border,#ccc);background:var(--white,#fff);color:var(--ink,#161716);font-weight:700;cursor:pointer;flex:none}
+.chat-actions-menu{position:relative;flex:none}
+.chat-actions-trigger{display:grid;place-items:center;width:46px;height:44px;list-style:none;border:1px solid var(--border,#a8aaa3);color:var(--ink,#161716);background:var(--white,#fff);font:800 27px/1 Arial,sans-serif;cursor:pointer;user-select:none}
+.chat-actions-trigger::-webkit-details-marker{display:none}
+.chat-actions-trigger:hover,.chat-actions-menu[open] .chat-actions-trigger{border-color:var(--ink,#161716);background:var(--soft,#f2f2ee)}
+.chat-actions-trigger:focus-visible{outline:3px solid var(--red,#e83f35);outline-offset:3px}
+.chat-actions-popover{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:185px;padding:5px;background:var(--white,#fff);border:1px solid var(--border,#c2c3bb);box-shadow:0 9px 24px #0002}
+.chat-actions-item{width:100%;display:block;text-align:left;background:transparent;border:0;color:var(--ink,#161716);padding:13px 12px;font:700 12px 'Courier New',monospace;cursor:pointer;white-space:nowrap}
+.chat-actions-item:hover:not(:disabled),.chat-actions-item:focus-visible{background:var(--soft,#eee)}
+.chat-actions-item + .chat-actions-item{border-top:1px solid var(--border,#ddd)}
+.chat-actions-danger:hover:not(:disabled){color:var(--red,#c52e29)}
+@media (max-width: 940px) {
+ .dash-mobile-account-actions{display:flex;justify-content:flex-end;padding:0 22px 14px;background:var(--soft,#ededE8)}
+ .dash-mobile-signout{display:inline-flex;align-items:center;justify-content:space-between;gap:18px;min-height:44px;padding:10px 14px;background:var(--white,#fff);border:1px solid var(--border,#ccc);color:var(--ink,#171717);font:700 12px 'Courier New',monospace;cursor:pointer}
+ .dash-mobile-signout:hover{border-color:var(--red,#e83f35);color:var(--red,#e83f35)}
+ .dash-mobile-signout:focus-visible{outline:3px solid var(--red,#e83f35);outline-offset:3px}
+}
+@media (max-width: 700px) {
+ .chat-shell{display:block;min-height:360px}
+ .chat-shell:not(.is-room-open) .chat-room{display:none}
+ .chat-shell.is-room-open .chat-inbox{display:none}
+ .chat-inbox{border-bottom:0;min-height:280px}
+ .chat-inbox-list{max-height:none;min-height:220px}
+ .chat-room{min-height:440px}
+ .chat-room-header{flex-wrap:nowrap;align-items:center;flex-direction:row;gap:8px;padding:12px}
+ .chat-room-title{gap:9px}
+ .chat-room-header h2{font-size:17px}
+ .chat-room-header p{font-size:11px}
+ .chat-back-to-inbox{display:inline-flex}
+ .chat-moderation-actions{width:auto;flex:none;margin-left:auto}
+ .chat-message-list{height:min(50vh,460px);min-height:230px;padding:13px 11px}
+ .chat-compose{padding:12px}
+ .chat-compose textarea{min-height:76px;font-size:16px}
+ .chat-contract-panel{margin:0 12px 15px;padding:12px}
+ .chat-contract-panel-heading{flex-wrap:wrap}
+ .chat-contract-panel-heading h3{font-size:17px}
+ .contract-hours{grid-template-columns:1fr}
+ .chat-inbox-item{min-height:70px}
+}
+@media (max-width: 390px) {
+ .chat-room-title{flex-direction:column;align-items:flex-start;gap:5px}
+ .chat-room-header{align-items:flex-start;flex-direction:row}
+ .chat-back-to-inbox{min-height:35px;padding:5px 8px}
+ .dash-mobile-account-actions{padding:0 18px 12px}
+ .chat-actions-popover{min-width:175px}
+}

@@ -37,6 +37,7 @@ let inboxUnsub = null;
 let messagesUnsub = null;
 let contractsUnsub = null;
 let activeConversation = null;
+let mobileShowingInbox = false;
 let conversations = [];
 let messages = [];
 let contracts = new Map();
@@ -158,6 +159,9 @@ function chatBusy(value, label = "Sending…") {
 function showConversationHeader() {
   const title = $("#chat-person-name");
   if (!title) return;
+  const actions = $("#chat-actions-menu");
+  if (actions) { actions.open = false; actions.hidden = !activeConversation; }
+  $(".chat-shell")?.classList.toggle("is-room-open", Boolean(activeConversation) && !mobileShowingInbox);
   if (!activeConversation) {
     title.textContent = "Choose a conversation";
     $("#chat-person-detail").textContent = "Select a chat, or start one from Explore Freelancers.";
@@ -381,9 +385,15 @@ function detachConversation() {
   const older = $("#chat-load-older"); if (older) older.hidden = true;
 }
 function selectConversation(convo) {
-  if (!convo || (convo.id === activeConversation?.id && messagesUnsub)) return;
+  if (!convo) return;
+  if (convo.id === activeConversation?.id && messagesUnsub) {
+    mobileShowingInbox = false;
+    showConversationHeader();
+    return;
+  }
   detachConversation();
   activeConversation = convo;
+  mobileShowingInbox = false;
   blockedByMe = false; pendingSend = null; 
   showConversationHeader();
   refreshMyBlock();
@@ -593,6 +603,24 @@ export function initializeMessaging({ uid, role, displayName }) {
   $("#chat-retry")?.addEventListener("click", () => onSend(null, true));
   $("#chat-load-older")?.addEventListener("click", loadOlderMessages);
   $("#chat-block")?.addEventListener("click", toggleBlock);
+  const conversationMenu = $("#chat-actions-menu");
+  conversationMenu?.addEventListener("click", event => {
+    if (event.target.closest("#chat-block, #chat-offer-button")) conversationMenu.open = false;
+  });
+  document.addEventListener("click", event => {
+    if (conversationMenu?.open && !conversationMenu.contains(event.target)) conversationMenu.open = false;
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && conversationMenu?.open) {
+      conversationMenu.open = false;
+      conversationMenu.querySelector("summary")?.focus();
+    }
+  });
+  $("#chat-back-to-inbox")?.addEventListener("click", () => {
+    mobileShowingInbox = true;
+    $(".chat-shell")?.classList.remove("is-room-open");
+    $("#chat-inbox-search")?.focus();
+  });
   const deadlineInput = $("#contract-deadline");
   if (deadlineInput) deadlineInput.min = todayLocal();
   $("#contract-payment-terms")?.addEventListener("change", () => {
